@@ -36,7 +36,7 @@ This plugin closes both gaps:
 ## Requirements
 
 - **Hermes Agent** — any recent build that supports the plugin system (`hermes plugins install`).
-- **OpenSpec CLI** (optional) — needed for five of the six agent tools. The dashboard tab works without it. Install via `npm install -g @openspec/cli` or set `OPENSPEC_BIN` to the binary path.
+- **OpenSpec CLI** (optional) — needed for five of the six agent tools. The dashboard tab works without it. Install via `npm install -g @fission-ai/openspec@latest` or set `OPENSPEC_BIN` to the binary path.
 - **Git** — used for branch diffs and spec commit-date sorting.
 
 ## Quickstart
