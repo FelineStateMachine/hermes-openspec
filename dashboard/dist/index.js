@@ -143,6 +143,10 @@
     folder: "M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z",
     chevron: "M9 18l6-6-6-6",
     branch: "M6 3v12M18 9a3 3 0 1 0-3-3M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18 9a3 3 0 0 1-3 3H6",
+    proposal: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5",
+    tasks: "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
+    design: "M12 19l7-7 3 3-7 7-3-3zM18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5zM2 2l7.586 7.586M11 11a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z",
+    specs: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
   };
 
   // ── Modal (lightweight, no Dialog in SDK) ─────────────────────────────
@@ -259,17 +263,19 @@
               items.length === 0 ? h("span", { className: "os-col-empty" }, "—") :
                 items.map(function (it) {
                   var artifacts = [];
-                  if (it.hasProposal) artifacts.push("P");
-                  if (it.hasTasks) artifacts.push("T");
-                  if (it.hasDesign) artifacts.push("D");
-                  if (it.hasSpecs) artifacts.push("S");
+                  if (it.hasProposal) artifacts.push({ d: ICO.proposal, label: "proposal" });
+                  if (it.hasTasks) artifacts.push({ d: ICO.tasks, label: "tasks" });
+                  if (it.hasDesign) artifacts.push({ d: ICO.design, label: "design" });
+                  if (it.hasSpecs) artifacts.push({ d: ICO.specs, label: "specs" });
                   var pct = it.taskStats && it.taskStats.total > 0 ? Math.round((it.taskStats.done / it.taskStats.total) * 100) : 0;
                   return h("button", {
                     key: it.id || it.name, className: cn("os-card", STATUS_TONE[it.status] || ""), onClick: function () { onSelectItem(it); },
                   },
                     h("div", { className: "os-card-title" }, it.title || it.name),
                     h("div", { className: "os-card-foot" },
-                      artifacts.length ? h("span", { className: "os-card-artifacts", title: "P=proposal T=tasks D=design S=specs" }, artifacts.join(" ")) : null,
+                      artifacts.length ? h("span", { className: "os-card-artifacts" },
+                        artifacts.map(function (a, i) { return h(Icon, { key: i, d: a.d, size: 11, title: a.label }); })
+                      ) : null,
                       it.taskStats ? h("span", { className: "os-card-progress" },
                         h("span", { className: "os-card-progress-track" }, h("span", { className: "os-card-progress-fill", style: { width: pct + "%" } })),
                         h("span", { className: "os-card-stats" }, it.taskStats.done + "/" + it.taskStats.total)
