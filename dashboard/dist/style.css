@@ -172,3 +172,31 @@
 .os-diff-col { border: 1px solid var(--color-border, #2a2a2a); border-radius: var(--radius-sm, 0.375rem); padding: 0.5rem; overflow-x: auto; }
 .os-diff-col-head { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-muted-foreground, #777); margin-bottom: 0.375rem; }
 .os-diff-unified { background: var(--color-secondary, #0e0e0e); border: 1px solid var(--color-border, #2a2a2a); border-radius: var(--radius-sm, 0.375rem); padding: 0.625rem; font-family: var(--theme-font-mono, monospace); font-size: 0.72rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+
+/* Semantic spec delta view */
+.os-spec-delta { display: flex; flex-direction: column; gap: 0.75rem; }
+.os-delta-summary { padding: 0.5rem 0.625rem; background: var(--color-secondary, #0e0e0e); border: 1px solid var(--color-border, #2a2a2a); border-radius: var(--radius-sm, 0.375rem); }
+.os-delta-summary-text { font-size: 0.8rem; font-weight: 600; }
+.os-delta-unchanged { color: var(--color-muted-foreground, #777); }
+.os-delta-section { border: 1px solid var(--color-border, #2a2a2a); border-radius: var(--radius-sm, 0.375rem); padding: 0.5rem; }
+.os-delta-section-head { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-muted-foreground, #777); margin-bottom: 0.375rem; }
+.os-spec-req-delta { margin-bottom: 0.5rem; }
+.os-spec-req-delta:last-child { margin-bottom: 0; }
+.os-spec-scn-added { border-left: 2px solid #22c55e; padding-left: 0.5rem; }
+.os-spec-scn-removed { border-left: 2px solid #ef4444; padding-left: 0.5rem; opacity: 0.7; }
+.os-spec-scn-modified { border-left: 2px solid #f59e0b; padding-left: 0.5rem; }
+.os-delta-desc-change { margin: 0.25rem 0; padding: 0.375rem; background: var(--color-secondary, #0e0e0e); border-radius: var(--radius-sm, 0.375rem); font-size: 0.8rem; }
+.os-delta-before { color: var(--color-muted-foreground, #999); text-decoration: line-through; }
+.os-delta-after { color: var(--color-foreground, #e0e0e0); }
+.os-delta-label { font-weight: 600; font-size: 0.7rem; text-transform: uppercase; }
+.os-delta-scenarios { margin-top: 0.25rem; }
+.os-delta-scenario-change { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.25rem; }
+.os-delta-unchanged-section { margin-top: 0.25rem; }
+.os-delta-unchanged-section summary { cursor: pointer; font-size: 0.78rem; color: var(--color-muted-foreground, #777); }
+.os-delta-unchanged-list { padding: 0.375rem 0 0 1rem; }
+.os-delta-unchanged-req { font-size: 0.78rem; color: var(--color-muted-foreground, #777); }
+.os-delta-raw-section { margin-top: 0.5rem; }
+.os-delta-raw-section summary { cursor: pointer; font-size: 0.78rem; color: var(--color-muted-foreground, #777); }
+
+/* Spec list semantic summary */
+.os-spec-item-summary { font-size: 0.65rem; font-family: var(--theme-font-mono, monospace); color: var(--color-muted-foreground, #999); margin-left: auto; white-space: nowrap; }

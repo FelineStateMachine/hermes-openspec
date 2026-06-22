@@ -27,6 +27,7 @@ _WRITE_TOOLS = (
     ("openspec_change_promote", schemas.OPENSPEC_CHANGE_PROMOTE, tools.openspec_change_promote, "➡️"),
     ("openspec_change_archive", schemas.OPENSPEC_CHANGE_ARCHIVE, tools.openspec_change_archive, "📦"),
     ("openspec_change_unarchive", schemas.OPENSPEC_CHANGE_UNARCHIVE, tools.openspec_change_unarchive, "♻️"),
+    ("openspec_spec_diff", schemas.OPENSPEC_SPEC_DIFF, tools.openspec_spec_diff, "🔍"),
 )
 
 

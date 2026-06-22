@@ -365,11 +365,7 @@
           ),
           mode === "diff" && s.diff
             ? h("div", { className: "os-spec-diff" },
-                h("div", { className: "os-diff-cols" },
-                  h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "current"), h(SpecContentView, { md: s.before })),
-                  h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "proposed"), h(SpecContentView, { md: s.content }))
-                ),
-                h("pre", { className: "os-diff-unified" }, s.diff)
+                h(SpecDeltaView, { semanticDiff: s.semantic_diff, lineDiff: s.diff, specPath: s.path })
               )
             : h(SpecContentView, { md: s.content })
         );
@@ -528,6 +524,122 @@
     );
   }
 
+  // ── Semantic spec delta view (requirement-level diff) ──────────────
+  function SpecDeltaView(_ref2) {
+    var semanticDiff = _ref2.semanticDiff, lineDiff = _ref2.lineDiff, specPath = _ref2.specPath;
+    var _rs = useState(true);
+    var rawCollapsed = _rs[0], setRawCollapsed = _rs[1];
+
+    if (!semanticDiff || !semanticDiff.requirements) {
+      // No semantic diff available — fall back to SpecContentView
+      return h("p", { className: "os-empty" }, "No semantic diff available.");
+    }
+
+    var reqs = semanticDiff.requirements;
+    var added = reqs.added || [], modified = reqs.modified || [], removed = reqs.removed || [], unchanged = reqs.unchanged || [];
+    var summaryParts = [];
+    if (added.length) summaryParts.push("+" + added.length + " added");
+    if (modified.length) summaryParts.push("~" + modified.length + " modified");
+    if (removed.length) summaryParts.push("-" + removed.length + " removed");
+
+    function renderScenario(scn, key, suffix) {
+      return h("div", { key: key, className: "os-spec-scn" + (suffix ? " os-spec-scn-" + suffix : "") },
+        h("div", { className: "os-spec-scn-name" }, scn.name),
+        scn.steps ? scn.steps.map(function (st, sti) {
+          return h("div", { key: sti, className: cn("os-spec-step", "os-spec-step-" + st.type.toLowerCase()) },
+            h("span", { className: "os-spec-step-label" }, st.type),
+            h("span", { className: "os-spec-step-text" }, st.text)
+          );
+        }) : null
+      );
+    }
+
+    function renderRequirement(req, key, badge) {
+      return h("div", { key: key, className: "os-spec-req os-spec-req-delta" },
+        h("div", { className: "os-spec-req-head" },
+          badge ? h(Badge, { className: "os-spec-status os-status-" + badge }, badge) : null,
+          h("span", { className: "os-spec-req-name" }, req.name)
+        ),
+        req.description ? h("p", { className: "os-spec-req-desc" }, req.description) : null,
+        req.scenarios ? req.scenarios.map(function (scn, si) {
+          return renderScenario(scn, si, badge);
+        }) : null
+      );
+    }
+
+    return h("div", { className: "os-spec-delta" },
+      // Summary
+      h("div", { className: "os-delta-summary" },
+        summaryParts.length
+          ? h("span", { className: "os-delta-summary-text" }, summaryParts.join(", "))
+          : h("span", { className: "os-delta-summary-text os-delta-unchanged" }, "No changes")
+      ),
+
+      // Added requirements
+      added.length ? h("div", { className: "os-delta-section" },
+        h("div", { className: "os-delta-section-head" }, "Added"),
+        added.map(function (req, i) { return renderRequirement(req, "a" + i, "added"); })
+      ) : null,
+
+      // Modified requirements
+      modified.length ? h("div", { className: "os-delta-section" },
+        h("div", { className: "os-delta-section-head" }, "Modified"),
+        modified.map(function (mod, i) {
+          return h("div", { key: "m" + i, className: "os-spec-req os-spec-req-delta" },
+            h("div", { className: "os-spec-req-head" },
+              h(Badge, { className: "os-spec-status os-status-modified" }, "modified"),
+              h("span", { className: "os-spec-req-name" }, mod.name)
+            ),
+            // Description change
+            mod.before.description !== mod.after.description ? h("div", { className: "os-delta-desc-change" },
+              h("div", { className: "os-delta-before" }, h("span", { className: "os-delta-label" }, "Before:"), " ", mod.before.description),
+              h("div", { className: "os-delta-after" }, h("span", { className: "os-delta-label" }, "After:"), " ", mod.after.description)
+            ) : null,
+            // Scenario-level deltas
+            (mod.scenarios_added && mod.scenarios_added.length) || (mod.scenarios_modified && mod.scenarios_modified.length) || (mod.scenarios_removed && mod.scenarios_removed.length)
+              ? h("div", { className: "os-delta-scenarios" },
+                  (mod.scenarios_added || []).map(function (scn, si) { return renderScenario(scn, "sa" + si, "added"); }),
+                  (mod.scenarios_modified || []).map(function (sm, si) {
+                    return h("div", { key: "sm" + si, className: "os-spec-scn os-spec-scn-modified" },
+                      h("div", { className: "os-spec-scn-name" }, sm.name, h(Badge, { className: "os-spec-status os-status-modified", style: { marginLeft: "0.5rem" } }, "modified")),
+                      h("div", { className: "os-delta-scenario-change" },
+                        sm.before.steps ? h("div", { className: "os-delta-before" }, sm.before.steps.map(function (st, sti) {
+                          return h("div", { key: sti, className: "os-spec-step os-spec-step-" + st.type.toLowerCase() }, h("span", { className: "os-spec-step-label" }, st.type), h("span", { className: "os-spec-step-text" }, st.text));
+                        })) : null,
+                        sm.after.steps ? h("div", { className: "os-delta-after" }, sm.after.steps.map(function (st, sti) {
+                          return h("div", { key: sti, className: "os-spec-step os-spec-step-" + st.type.toLowerCase() }, h("span", { className: "os-spec-step-label" }, st.type), h("span", { className: "os-spec-step-text" }, st.text));
+                        })) : null
+                      )
+                    );
+                  }),
+                  (mod.scenarios_removed || []).map(function (scn, si) { return renderScenario(scn, "sr" + si, "removed"); })
+                ) : null
+          );
+        })
+      ) : null,
+
+      // Removed requirements
+      removed.length ? h("div", { className: "os-delta-section" },
+        h("div", { className: "os-delta-section-head" }, "Removed"),
+        removed.map(function (req, i) { return renderRequirement(req, "r" + i, "removed"); })
+      ) : null,
+
+      // Unchanged requirements (collapsed)
+      unchanged.length ? h("details", { className: "os-delta-unchanged-section" },
+        h("summary", null, unchanged.length + " unchanged requirement" + (unchanged.length === 1 ? "" : "s")),
+        h("div", { className: "os-delta-unchanged-list" },
+          unchanged.map(function (name, i) { return h("div", { key: i, className: "os-delta-unchanged-req" }, name); })
+        )
+      ) : null,
+
+      // Raw diff (collapsible)
+      lineDiff ? h("details", { className: "os-delta-raw-section", open: !rawCollapsed ? true : false },
+        h("summary", { onClick: function (e) { e.preventDefault(); setRawCollapsed(!rawCollapsed); } }, "Raw diff"),
+        rawCollapsed ? null : h("pre", { className: "os-diff-unified" }, lineDiff)
+      ) : null
+    );
+  }
+
   // ── Specs view (spec browser: current / dirty / refs) ────────────────
   var SORT_MODES = [
     { value: "alpha", label: "A→Z" },
@@ -628,13 +740,20 @@
             return h("div", { className: "os-specs-grid" },
               h("div", { className: "os-specs-list" },
                 sorted.map(function (f) {
+                  var summaryParts = [];
+                  if (f.semantic_summary) {
+                    if (f.semantic_summary.added) summaryParts.push("+" + f.semantic_summary.added);
+                    if (f.semantic_summary.modified) summaryParts.push("~" + f.semantic_summary.modified);
+                    if (f.semantic_summary.removed) summaryParts.push("-" + f.semantic_summary.removed);
+                  }
                   return h("button", {
                     key: f.path, className: cn("os-spec-item", f.path === selPath && "os-spec-item-active", f.changed && "os-spec-item-changed"),
                     onClick: function () { setSelPath(f.path); if (onSelectToken && f.token) onSelectToken(f.token); },
                   },
                     h(Icon, { d: ICO.file, size: 13 }),
                     h("span", { className: "os-spec-item-path" }, f.path),
-                    f.changed ? h(Badge, { className: "os-spec-status os-status-" + f.status }, f.status) : null
+                    f.changed ? h(Badge, { className: "os-spec-status os-status-" + f.status }, f.status) : null,
+                    summaryParts.length ? h("span", { className: "os-spec-item-summary" }, summaryParts.join(" ")) : null
                   );
                 })
               ),
@@ -650,8 +769,8 @@
                 mode === "current" ? h(SpecContentView, { md: selFile.after }) :
                   h("div", { className: "os-spec-diff" },
                     h("div", { className: "os-diff-cols" },
-                      h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "before"), h(Markdown, { md: selFile.before })),
-                      h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "after"), h(Markdown, { md: selFile.after }))
+                      h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "before"), h(SpecContentView, { md: selFile.before })),
+                      h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "after"), h(SpecContentView, { md: selFile.after }))
                     ),
                     selFile.diff ? h("pre", { className: "os-diff-unified" }, selFile.diff) : null
                   )

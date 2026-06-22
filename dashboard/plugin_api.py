@@ -400,12 +400,14 @@ def _change_detail(root: Path, change_name: str) -> Optional[dict[str, Any]]:
                 after = _read_doc(child) or ""
                 before = _read_worktree_spec(root, rel)
                 status = _spec_status(before, after)
+                semantic = _compute_semantic_diff(before, after)
                 specs.append({
                     "path": rel,
                     "content": after,
                     "before": before,
                     "status": status,
                     "diff": _spec_diff(before, after, rel) if status not in ("unchanged", "missing") else "",
+                    "semantic_diff": semantic,
                 })
         except OSError:
             pass
@@ -592,6 +594,43 @@ def _spec_diff(before: Optional[str], after: Optional[str], path: str) -> str:
     )
 
 
+def _compute_semantic_diff(before: Optional[str], after: Optional[str]) -> dict[str, Any]:
+    """Compute a semantic requirement-level delta using the shared spec parser."""
+    try:
+        spec_parser_mod = _load_spec_parser()
+        if spec_parser_mod is None:
+            return {}
+        return spec_parser_mod.semantic_spec_diff(before, after)
+    except Exception:
+        return {}
+
+
+def _compute_semantic_summary(before: Optional[str], after: Optional[str]) -> Optional[dict[str, int]]:
+    """Compute compact requirement-level counts for spec list display."""
+    try:
+        spec_parser_mod = _load_spec_parser()
+        if spec_parser_mod is None:
+            return None
+        diff = spec_parser_mod.semantic_spec_diff(before, after)
+        return spec_parser_mod.semantic_summary(diff)
+    except Exception:
+        return None
+
+
+def _load_spec_parser():
+    """Import the shared spec_parser module from the plugin root."""
+    import importlib.util
+    candidate = Path(__file__).resolve().parent.parent / "spec_parser.py"
+    if not candidate.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("openspec_spec_parser", candidate)
+    if spec is None or spec.loader is None:
+        return None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def _spec_status(before: Optional[str], after: Optional[str]) -> str:
     if before is None and after is None:
         return "missing"
@@ -675,6 +714,7 @@ def _spec_browser(root: Path, before: str = "", after: str = "", dirty: bool = F
             "before": before_content,
             "after": after_content,
             "diff": _spec_diff(before_content, after_content, rel) if status not in {"unchanged", "missing"} else "",
+            "semantic_summary": _compute_semantic_summary(before_content, after_content) if status not in {"unchanged", "missing"} else None,
         })
 
     return {

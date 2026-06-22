@@ -13,7 +13,7 @@ This plugin closes both gaps:
 
 ## What you get
 
-**Agent tools** — 15 tools covering the full OpenSpec lifecycle: idea capture and enrichment, change creation/promotion/archival, task tracking, spec validation, and context resolution.
+**Agent tools** — 16 tools covering the full OpenSpec lifecycle: idea capture and enrichment, change creation/promotion/archival, task tracking, spec validation, semantic spec diffing, and context resolution.
 
 | Group | Tools |
 |---|---|
@@ -21,8 +21,9 @@ This plugin closes both gaps:
 | Ideas | `openspec_idea_create`, `openspec_idea_enrich`, `openspec_idea_promote` |
 | Changes | `openspec_change_create`, `openspec_change_promote`, `openspec_change_archive`, `openspec_change_unarchive` |
 | Tasks | `openspec_task_list`, `openspec_task_set_status` |
+| Specs | `openspec_spec_diff` |
 
-`openspec_context` and the lifecycle write tools (idea/change/task) are filesystem-backed and always available. `openspec_list`, `openspec_show`, `openspec_validate`, `openspec_status`, and `openspec_instructions` require the `openspec` CLI binary.
+`openspec_context`, `openspec_spec_diff`, and the lifecycle write tools (idea/change/task) are filesystem-backed and always available. `openspec_list`, `openspec_show`, `openspec_validate`, `openspec_status`, and `openspec_instructions` require the `openspec` CLI binary.
 
 For the full tool reference, lifecycle states, and delegation patterns, see [docs/index.md](docs/index.md).
 

@@ -1107,3 +1107,115 @@ def openspec_instructions(args: dict, **kwargs) -> str:
     reason = "\n".join(str(parsed.get(key) or "") for key in ("stderr", "stdout", "error"))
     fallback = _template_instruction_fallback(artifact, reason, args.get("workdir"), schema)
     return fallback or result
+
+
+def openspec_spec_diff(args: dict, **kwargs) -> str:
+    """Compare a change's delta spec against its baseline, or a worktree spec
+    against its HEAD version, and return the structured semantic delta plus a
+    unified line diff fallback.
+
+    Filesystem-backed — does not require the OpenSpec CLI binary.
+    """
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+
+    spec = str(args.get("spec") or "").strip()
+    if not spec:
+        return _error("spec is required (e.g. 'agent-tools')")
+
+    # Prevent path traversal
+    if spec.startswith("/") or ".." in Path(spec).parts:
+        return _error("spec must be a relative path without parent references")
+
+    change = str(args.get("change") or "").strip()
+
+    try:
+        from . import spec_parser  # type: ignore
+    except ImportError:
+        import spec_parser  # type: ignore
+
+    if change:
+        # Diff change spec vs baseline
+        change_spec_path = root / "openspec" / "changes" / change / "specs" / f"{spec}" / "spec.md"
+        # Also handle nested paths like "agent-tools/spec.md"
+        if not change_spec_path.is_file():
+            change_spec_path = root / "openspec" / "changes" / change / "specs" / f"{spec}.md"
+        if not change_spec_path.is_file():
+            return _error(
+                f"change spec not found: openspec/changes/{change}/specs/{spec}/spec.md",
+                change=change,
+                spec=spec,
+            )
+
+        after_md = _read_doc(change_spec_path)
+        baseline_path = root / "openspec" / "specs" / spec / "spec.md"
+        if not baseline_path.is_file():
+            baseline_path = root / "openspec" / "specs" / f"{spec}.md"
+
+        before_md = _read_doc(baseline_path) if baseline_path.is_file() else None
+        baseline_exists = before_md is not None
+    else:
+        # Diff worktree spec vs HEAD
+        worktree_path = root / "openspec" / "specs" / spec / "spec.md"
+        if not worktree_path.is_file():
+            worktree_path = root / "openspec" / "specs" / f"{spec}.md"
+        if not worktree_path.is_file():
+            return _error(
+                f"spec not found: openspec/specs/{spec}/spec.md",
+                spec=spec,
+            )
+
+        after_md = _read_doc(worktree_path)
+        before_md = _git_show_spec(root, spec)
+        if before_md is None:
+            return _error(
+                "git is required for worktree-vs-HEAD comparison and the spec "
+                "has no git history (it may be untracked). Pass 'change' to "
+                "diff against a change's delta spec instead.",
+                spec=spec,
+            )
+        baseline_exists = True
+
+    diff = spec_parser.semantic_spec_diff(before_md, after_md)
+    line_diff = spec_parser.unified_diff(before_md, after_md, spec)
+
+    return json.dumps({
+        "ok": True,
+        "spec": spec,
+        "change": change or None,
+        "status": diff["status"],
+        "baseline_exists": baseline_exists,
+        "requirements": diff["requirements"],
+        "line_diff": line_diff,
+        "workdir": str(root),
+    })
+
+
+def _git_show_spec(root: Path, spec_path: str) -> str | None:
+    """Return the HEAD version of a spec via git, or None if unavailable."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "show", f"HEAD:openspec/specs/{spec_path}/spec.md"],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        # Try flat path
+        try:
+            proc = subprocess.run(
+                ["git", "-C", str(root), "show", f"HEAD:openspec/specs/{spec_path}.md"],
+                capture_output=True,
+                text=True,
+                timeout=8,
+                check=False,
+            )
+        except Exception:
+            return None
+        if proc.returncode != 0:
+            return None
+    return proc.stdout
