@@ -1,6 +1,6 @@
 # Tool Reference
 
-Two perspectives on the same 16 tools. Use whichever table matches what you
+Two perspectives on the same 19 tools. Use whichever table matches what you
 already know.
 
 ## Artifact → tool mapping
@@ -28,6 +28,9 @@ that performs it.
 | Archive a completed change | `openspec/changes/archive/` | `openspec_change_archive` | Moves the change dir to archive |
 | Reopen an archived change | `openspec/changes/` (restore) | `openspec_change_unarchive` | Moves the change dir back to active |
 | Compare a change spec against its baseline | Spec files (read-only) | `openspec_spec_diff` | Returns a structured semantic delta at the requirement/scenario level plus a unified line diff fallback. Filesystem-backed. |
+| Create a spec from structured input | `openspec/specs/<spec>/spec.md` or `openspec/changes/<change>/specs/<spec>/spec.md` | `openspec_spec_create` | Writes formatted spec.md from title/purpose/requirements array. Overwrite with `force`. Filesystem-backed. |
+| Read a spec as structured JSON | Spec files (read-only) | `openspec_spec_show` | Returns parsed title, purpose, requirements with scenarios and steps. Filesystem-backed. |
+| List specs in a project | `openspec/specs/` or `openspec/changes/<change>/specs/` | `openspec_spec_list` | Returns array of spec names. Change-scoped or baseline. Filesystem-backed. |
 
 ---
 
@@ -49,6 +52,9 @@ the reference.
 | `openspec_change_archive` | Moves `openspec/changes/<change>/` → `openspec/changes/archive/<change>/` | Done → Archived |
 | `openspec_change_unarchive` | Moves archive dir back to active changes | Archived → Done |
 | `openspec_spec_diff` | Returns structured semantic delta (requirement/scenario level) between change spec and baseline, or worktree spec and HEAD. Read-only. | (no transition — read tool) |
+| `openspec_spec_create` | Writes formatted spec.md from structured input (title, purpose, requirements with scenarios). `change` scopes to delta specs; omit for baseline. | (creates spec file) |
+| `openspec_spec_show` | Reads and parses a spec into structured JSON (title, purpose, requirements, scenarios, steps). Read-only. | (no transition — read tool) |
+| `openspec_spec_list` | Lists spec names under `openspec/specs/` or `openspec/changes/<change>/specs/`. Read-only. | (no transition — read tool) |
 
 ### Read tools
 

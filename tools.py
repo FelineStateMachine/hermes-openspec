@@ -1219,3 +1219,177 @@ def _git_show_spec(root: Path, spec_path: str) -> str | None:
         if proc.returncode != 0:
             return None
     return proc.stdout
+
+
+def _spec_target_path(root: Path, spec: str, change: str) -> Path:
+    """Resolve the spec.md path for a given spec name and optional change scope."""
+    if change:
+        base = root / "openspec" / "changes" / change / "specs"
+    else:
+        base = root / "openspec" / "specs"
+    return base / spec / "spec.md"
+
+
+def _spec_dir_from_path(spec_path: Path) -> str:
+    """Extract the spec directory name from a spec.md path."""
+    return spec_path.parent.name
+
+
+def _list_specs_in_dir(specs_root: Path) -> list[str]:
+    """List spec names (directory names containing spec.md) under a specs root."""
+    if not specs_root.is_dir():
+        return []
+    names: list[str] = []
+    for child in sorted(specs_root.iterdir()):
+        if child.is_dir() and (child / "spec.md").is_file():
+            names.append(child.name)
+        elif child.is_file() and child.suffix == ".md" and child.name != "spec.md":
+            # Flat .md files at the root level
+            names.append(child.stem)
+    return names
+
+
+def openspec_spec_create(args: dict, **kwargs) -> str:
+    """Create a spec from structured input and write a formatted spec.md.
+
+    Filesystem-backed — does not require the OpenSpec CLI binary.
+    """
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+
+    spec = str(args.get("spec") or "").strip()
+    if not spec:
+        return _error("spec is required (e.g. 'agent-tools')")
+
+    # Validate slug: kebab-case, no path traversal
+    if not _VALID_CHANGE_RE.match(spec) or ".." in Path(spec).parts or spec.startswith("/"):
+        return _error(f"spec must be kebab-case (letters, numbers, hyphens): {spec}")
+
+    title = str(args.get("title") or "").strip()
+    if not title:
+        return _error("title is required")
+
+    purpose = str(args.get("purpose") or "").strip()
+    if not purpose:
+        return _error("purpose is required")
+
+    requirements = args.get("requirements")
+    if not isinstance(requirements, list) or not requirements:
+        return _error("requirements must be a non-empty array")
+
+    change = str(args.get("change") or "").strip()
+    if change and not _VALID_CHANGE_RE.match(change):
+        return _error(f"change must be kebab-case: {change}")
+
+    force = bool(args.get("force"))
+
+    spec_path = _spec_target_path(root, spec, change)
+
+    if spec_path.exists() and not force:
+        rel = _relative(spec_path, root)
+        return _error(
+            f"spec already exists at {rel}. Pass force=true to overwrite.",
+            spec=spec,
+            change=change or None,
+            path=rel,
+        )
+
+    try:
+        from . import spec_parser  # type: ignore
+    except ImportError:
+        import spec_parser  # type: ignore
+
+    md = spec_parser.spec_to_markdown(title, purpose, requirements)
+
+    spec_path.parent.mkdir(parents=True, exist_ok=True)
+    spec_path.write_text(md, encoding="utf-8")
+
+    return json.dumps({
+        "ok": True,
+        "spec": spec,
+        "change": change or None,
+        "path": _relative(spec_path, root),
+        "absolute_path": str(spec_path),
+        "workdir": str(root),
+    })
+
+
+def openspec_spec_show(args: dict, **kwargs) -> str:
+    """Read a spec as structured JSON using parse_spec.
+
+    Filesystem-backed — does not require the OpenSpec CLI binary.
+    """
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+
+    spec = str(args.get("spec") or "").strip()
+    if not spec:
+        return _error("spec is required (e.g. 'agent-tools')")
+
+    if spec.startswith("/") or ".." in Path(spec).parts:
+        return _error("spec must be a relative path without parent references")
+
+    change = str(args.get("change") or "").strip()
+
+    spec_path = _spec_target_path(root, spec, change)
+    if not spec_path.is_file():
+        # Try flat .md path
+        if change:
+            flat = root / "openspec" / "changes" / change / "specs" / f"{spec}.md"
+        else:
+            flat = root / "openspec" / "specs" / f"{spec}.md"
+        if flat.is_file():
+            spec_path = flat
+        else:
+            location = f"openspec/changes/{change}/specs/{spec}/spec.md" if change else f"openspec/specs/{spec}/spec.md"
+            return _error(f"spec not found: {location}", spec=spec, change=change or None)
+
+    try:
+        from . import spec_parser  # type: ignore
+    except ImportError:
+        import spec_parser  # type: ignore
+
+    md = _read_doc(spec_path)
+    parsed = spec_parser.parse_spec(md)
+
+    return json.dumps({
+        "ok": True,
+        "spec": spec,
+        "change": change or None,
+        "path": _relative(spec_path, root),
+        "title": parsed["title"],
+        "purpose": parsed["purpose"],
+        "requirements": parsed["requirements"],
+        "workdir": str(root),
+    })
+
+
+def openspec_spec_list(args: dict, **kwargs) -> str:
+    """List specs within a change, or baseline specs.
+
+    Filesystem-backed — does not require the OpenSpec CLI binary.
+    """
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+
+    change = str(args.get("change") or "").strip()
+
+    if change:
+        if not _VALID_CHANGE_RE.match(change):
+            return _error(f"change must be kebab-case: {change}")
+        specs_root = root / "openspec" / "changes" / change / "specs"
+    else:
+        specs_root = root / "openspec" / "specs"
+
+    names = _list_specs_in_dir(specs_root)
+
+    return json.dumps({
+        "ok": True,
+        "change": change or None,
+        "specs": names,
+        "count": len(names),
+        "workdir": str(root),
+    })

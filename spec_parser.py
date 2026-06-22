@@ -240,6 +240,48 @@ def unified_diff(before_md: str | None, after_md: str | None, path: str = "spec"
     )
 
 
+def spec_to_markdown(title: str, purpose: str, requirements: list[dict[str, Any]]) -> str:
+    """Serialize structured spec data into OpenSpec spec markdown.
+
+    Inverse of ``parse_spec`` — takes ``{title, purpose, requirements}`` and
+    produces ``# Title`` / ``## Purpose`` / ``## Requirements`` /
+    ``### Requirement:`` / ``#### Scenario:`` formatted markdown.
+
+    Each requirement is ``{name, description, scenarios}`` and each
+    scenario is ``{name, steps: [{type, text}]}``.
+    """
+    lines: list[str] = [f"# {title}", ""]
+
+    if purpose:
+        lines.append("## Purpose")
+        lines.append("")
+        lines.append(purpose)
+        lines.append("")
+
+    if requirements:
+        lines.append("## Requirements")
+        lines.append("")
+        for req in requirements:
+            name = str(req.get("name") or "").strip()
+            desc = str(req.get("description") or "").strip()
+            lines.append(f"### Requirement: {name}")
+            if desc:
+                lines.append(desc)
+            lines.append("")
+            for scn in req.get("scenarios") or []:
+                scn_name = str(scn.get("name") or "").strip()
+                lines.append(f"#### Scenario: {scn_name}")
+                lines.append("")
+                for step in scn.get("steps") or []:
+                    step_type = str(step.get("type") or "THEN").strip().upper()
+                    step_text = str(step.get("text") or "").strip()
+                    lines.append(f"- **{step_type}** {step_text}")
+                lines.append("")
+
+    # Trim trailing blank lines, ensure single trailing newline
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def re_match(pattern: str, string: str):
     """Wrapper to avoid importing re at module level in callers."""
     import re
