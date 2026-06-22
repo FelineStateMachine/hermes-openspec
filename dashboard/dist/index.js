@@ -195,9 +195,11 @@
         sources.map(function (s) { return h(SelectOption, { key: s.id, value: s.id }, s.name + (s.valid ? "" : " (invalid)")); })
       ),
       h("button", { className: "os-icon-btn", onClick: onRefresh, title: "Refresh", disabled: sources.length === 0 }, h(Icon, { d: ICO.refresh })),
-      h("button", { className: "os-icon-btn", onClick: onEdit, title: "Edit source", disabled: !active }, h(Icon, { d: ICO.edit })),
-      h("button", { className: "os-icon-btn", onClick: onRemove, title: "Remove source", disabled: !active }, h(Icon, { d: ICO.trash })),
-      h("button", { className: "os-icon-btn", onClick: onAdd, title: "Add source" }, h(Icon, { d: ICO.plus }))
+      h("div", { className: "os-toolbar-actions" },
+        h("button", { className: "os-icon-btn", onClick: onEdit, title: "Edit source", disabled: !active }, h(Icon, { d: ICO.edit })),
+        h("button", { className: "os-icon-btn", onClick: onRemove, title: "Remove source", disabled: !active }, h(Icon, { d: ICO.trash })),
+        h("button", { className: "os-icon-btn", onClick: onAdd, title: "Add source" }, h(Icon, { d: ICO.plus }))
+      )
     );
   }
 

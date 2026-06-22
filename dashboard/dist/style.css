@@ -8,6 +8,7 @@
 /* Toolbar */
 .os-toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .os-toolbar label { font-size: 0.75rem; color: var(--color-muted-foreground, #aaa); margin-right: 0.25rem; }
+.os-toolbar-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 
 /* Shrink Select dropdowns to fit their text content instead of stretching
    (the SDK Select trigger has w-full, which over-sizes in flex toolbars). */
