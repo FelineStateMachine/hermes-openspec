@@ -53,4 +53,4 @@ require design — that's a judgment call for the orchestrator.
 
 ---
 
-← [Back to overview](orchestration.md) · [Next: Tool reference →](tool-reference.md)
+← [Back to overview](index.md) · [Next: Tool reference →](tool-reference.md)

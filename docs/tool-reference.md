@@ -67,4 +67,4 @@ the reference.
 
 ---
 
-← [Back to overview](orchestration.md) · [← Previous: Lifecycle](lifecycle.md) · [Next: Delegation →](delegation.md)
+← [Back to overview](index.md) · [← Previous: Lifecycle](lifecycle.md) · [Next: Delegation →](delegation.md)
