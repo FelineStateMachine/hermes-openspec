@@ -30,7 +30,9 @@ from __future__ import annotations
 
 import difflib
 import importlib.util
+import os
 import re
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,6 +69,19 @@ router = APIRouter()
 # Kept here so the plugin has zero core-dependency for filesystem traversal.
 # ---------------------------------------------------------------------------
 
+def _find_openspec_bin() -> Optional[str]:
+    """Locate the ``openspec`` CLI binary."""
+    candidates = [
+        os.getenv("OPENSPEC_BIN", "").strip(),
+        shutil.which("openspec") or "",
+        str(Path.home() / ".npm-global" / "bin" / "openspec"),
+    ]
+    for c in candidates:
+        if c and Path(c).exists() and os.access(c, os.X_OK):
+            return c
+    return None
+
+
 def _resolve_path(raw_path: str) -> Path:
     """Resolve a user-supplied path string to an absolute Path, rejecting
     null bytes and unparseable values. Mirrors web_server._fs_path semantics."""
@@ -97,6 +112,24 @@ def _find_git_root(start: Path) -> Optional[Path]:
             return None
         directory = parent
     return None
+
+
+def _repo_root(raw_path: str) -> tuple[Path | None, str | None]:
+    """Resolve a raw path to a repo root (git root or the path itself).
+
+    Unlike ``_source_root``, this does NOT require ``openspec/`` to exist —
+    it's used for add/update so sources can be registered before init.
+    """
+    try:
+        target = _resolve_path(raw_path)
+    except HTTPException as exc:
+        return None, str(exc.detail)
+    if not target.exists():
+        return None, "Path does not exist"
+    git_root = _find_git_root(target)
+    if git_root:
+        return git_root, None
+    return target, None
 
 
 def _source_root(raw_path: str) -> tuple[Path | None, str | None]:
@@ -296,7 +329,7 @@ def _scan(root: Path) -> Optional[dict[str, Any]]:
 
 
 def _source_payload(source: dict[str, Any]) -> dict[str, Any]:
-    root, error = _source_root(source["path"])
+    root, error = _repo_root(source["path"])
     name = source.get("name") or (root.name if root else Path(source["path"]).expanduser().name)
     base = {
         "token": source.get("token") or source.get("id"),
@@ -306,6 +339,9 @@ def _source_payload(source: dict[str, Any]) -> dict[str, Any]:
     }
     if root is None:
         return {**base, "valid": False, "repoRoot": None, "openspec": None, "error": error}
+    # Repo exists — check if openspec/ is initialized.
+    if not (root / "openspec").is_dir():
+        return {**base, "valid": False, "repoRoot": str(root), "openspec": None, "error": "No openspec/ directory found"}
     return {
         **base,
         "valid": True,
@@ -704,9 +740,9 @@ def add_source(body: _SourceCreate):
     raw_path = str(body.path or "").strip()
     if not raw_path:
         raise HTTPException(status_code=400, detail="path is required")
-    root, error = _source_root(raw_path)
+    root, error = _repo_root(raw_path)
     if root is None:
-        raise HTTPException(status_code=400, detail=error or "No openspec/ directory found")
+        raise HTTPException(status_code=400, detail=error or "Invalid path")
     try:
         source = _registry.add_source(raw_path, str(body.name or "").strip())
     except ValueError:
@@ -730,9 +766,9 @@ def update_source(source_id: str, body: _SourceCreate):
     raw_path = str(body.path or "").strip()
     if not raw_path:
         raise HTTPException(status_code=400, detail="path is required")
-    root, error = _source_root(raw_path)
+    root, error = _repo_root(raw_path)
     if root is None:
-        raise HTTPException(status_code=400, detail=error or "No openspec/ directory found")
+        raise HTTPException(status_code=400, detail=error or "Invalid path")
     try:
         source = _registry.update_source(source_id, path=raw_path, name=str(body.name or "").strip())
     except ValueError:
@@ -740,6 +776,42 @@ def update_source(source_id: str, body: _SourceCreate):
     if source is None:
         raise HTTPException(status_code=404, detail="Source not found")
     return {"ok": True, "source": _source_payload(source)}
+
+
+@router.post("/sources/{source_id}/init")
+def init_source(source_id: str):
+    if _registry is None:
+        raise HTTPException(status_code=503, detail="OpenSpec registry not available")
+    source = _registry.get_source(source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    root, error = _repo_root(source["path"])
+    if root is None:
+        raise HTTPException(status_code=400, detail=error or "Invalid path")
+    if (root / "openspec").is_dir():
+        return {"ok": True, "message": "Already initialized", "source": _source_payload(source)}
+    # Try `openspec init <path> --tools none` first.
+    exe = _find_openspec_bin()
+    if exe:
+        try:
+            proc = subprocess.run(
+                [exe, "init", str(root), "--tools", "none"],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            if proc.returncode != 0:
+                detail = (proc.stderr or proc.stdout or "").strip()
+                raise HTTPException(status_code=500, detail=f"openspec init failed: {detail}")
+        except subprocess.TimeoutExpired:
+            raise HTTPException(status_code=504, detail="openspec init timed out")
+    else:
+        # Fallback: create the minimal directory structure.
+        try:
+            (root / "openspec" / "changes").mkdir(parents=True, exist_ok=True)
+            (root / "openspec" / "specs").mkdir(parents=True, exist_ok=True)
+            (root / "openspec" / "ideas").mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to create openspec/ structure: {exc}")
+    return {"ok": True, "message": "OpenSpec initialized", "source": _source_payload(source)}
 
 
 @router.get("/sources/{source_id}/changes/{change_name}")
