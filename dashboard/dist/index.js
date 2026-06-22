@@ -258,14 +258,23 @@
             h("div", { className: "os-col-list" },
               items.length === 0 ? h("span", { className: "os-col-empty" }, "—") :
                 items.map(function (it) {
+                  var artifacts = [];
+                  if (it.hasProposal) artifacts.push("P");
+                  if (it.hasTasks) artifacts.push("T");
+                  if (it.hasDesign) artifacts.push("D");
+                  if (it.hasSpecs) artifacts.push("S");
+                  var pct = it.taskStats && it.taskStats.total > 0 ? Math.round((it.taskStats.done / it.taskStats.total) * 100) : 0;
                   return h("button", {
                     key: it.id || it.name, className: cn("os-card", STATUS_TONE[it.status] || ""), onClick: function () { onSelectItem(it); },
                   },
                     h("div", { className: "os-card-title" }, it.title || it.name),
                     h("div", { className: "os-card-foot" },
-                      h("span", { className: "os-card-name" }, it.name),
-                      it.token ? h(CopyChip, { text: source.name + "/" + it.token }) : null,
-                      it.taskStats ? h("span", { className: "os-card-stats" }, it.taskStats.done + "/" + it.taskStats.total) : null
+                      artifacts.length ? h("span", { className: "os-card-artifacts", title: "P=proposal T=tasks D=design S=specs" }, artifacts.join(" ")) : null,
+                      it.taskStats ? h("span", { className: "os-card-progress" },
+                        h("span", { className: "os-card-progress-track" }, h("span", { className: "os-card-progress-fill", style: { width: pct + "%" } })),
+                        h("span", { className: "os-card-stats" }, it.taskStats.done + "/" + it.taskStats.total)
+                      ) : null,
+                      it.token ? h(CopyChip, { text: source.name + "/" + it.token }) : null
                     )
                   );
                 })
