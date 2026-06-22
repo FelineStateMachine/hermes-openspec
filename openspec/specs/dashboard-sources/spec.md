@@ -3,9 +3,7 @@
 ## Purpose
 
 The dashboard plugin SHALL let maintainers register, inspect, initialize, update, and remove OpenSpec-capable repositories from the Hermes dashboard. Source management must work even before a repository has been initialized with an `openspec/` directory.
-
 ## Requirements
-
 ### Requirement: Source listing API
 The dashboard API SHALL list registered sources with live validity, repository, and OpenSpec scan information.
 
@@ -64,22 +62,27 @@ The dashboard API SHALL expose create, update, and delete operations for registr
 - **THEN** the API removes it from the registry and subsequent source lists omit it
 
 ### Requirement: Source initialization
-The dashboard API SHALL initialize a registered source that exists but lacks an `openspec/` directory.
+The dashboard API SHALL initialize a registered source that exists but lacks an `openspec/` directory and SHALL normalize the resulting OpenSpec layout to include all directory roots used by the plugin.
 
 #### Scenario: OpenSpec CLI available
 - **GIVEN** the OpenSpec CLI binary is available
 - **WHEN** the dashboard initializes an uninitialized source
-- **THEN** the API runs `openspec init <repo-root> --tools none` and returns the refreshed source payload
+- **THEN** the API runs `openspec init <repo-root> --tools none`, ensures `openspec/changes`, `openspec/changes/archive`, `openspec/specs`, and `openspec/ideas` all exist, and returns the refreshed source payload
 
 #### Scenario: OpenSpec CLI unavailable
 - **GIVEN** the OpenSpec CLI binary is unavailable
 - **WHEN** the dashboard initializes an uninitialized source
-- **THEN** the API creates a minimal `openspec/changes`, `openspec/specs`, and `openspec/ideas` directory structure and returns the refreshed source payload
+- **THEN** the API creates `openspec/changes`, `openspec/changes/archive`, `openspec/specs`, and `openspec/ideas` and returns the refreshed source payload
 
 #### Scenario: Already initialized source
 - **GIVEN** the source already has an `openspec/` directory
 - **WHEN** the dashboard initializes the source
 - **THEN** the API returns success with an `Already initialized` message and does not modify existing artifacts
+
+#### Scenario: CLI-listable initialized source
+- **GIVEN** a source has been initialized through the dashboard API
+- **WHEN** an agent or maintainer runs OpenSpec list commands in that source
+- **THEN** the required OpenSpec directories exist so list operations are not blocked by a missing `changes` root
 
 ### Requirement: Dashboard source controls
 The dashboard UI SHALL present compact controls for selecting and managing registered sources.
@@ -97,3 +100,4 @@ The dashboard UI SHALL present compact controls for selecting and managing regis
 - **GIVEN** no sources are registered
 - **WHEN** the dashboard renders the OpenSpec tab
 - **THEN** it shows an empty-state path to add a source instead of rendering a broken board
+

@@ -3,9 +3,7 @@
 ## Purpose
 
 The plugin SHALL expose OpenSpec-aware Hermes tools that let agents discover, inspect, validate, and act on repo-local OpenSpec artifacts without manually assembling shell commands. Tools are expected to be safe for maintainers to use across multiple registered repositories and predictable enough for other agents to depend on.
-
 ## Requirements
-
 ### Requirement: Registered-source context resolution
 The plugin SHALL provide an `openspec_context` tool that resolves user-facing OpenSpec identifiers into the source repository path and relevant artifact content.
 
@@ -61,7 +59,7 @@ CLI-backed tools SHALL execute OpenSpec commands in a resolved project workdir a
 - **THEN** the tool returns `ok: false` with the command, workdir, and timeout error
 
 ### Requirement: Artifact listing and inspection
-The plugin SHALL provide tools that map directly to OpenSpec list/show/status/instructions workflows.
+The plugin SHALL provide tools that map directly to OpenSpec list/show/status/instructions workflows while smoothing known CLI rough edges that would otherwise block fresh-repository agent workflows.
 
 #### Scenario: List changes or specs
 - **WHEN** an agent calls `openspec_list` with kind `changes` or `specs`
@@ -78,3 +76,13 @@ The plugin SHALL provide tools that map directly to OpenSpec list/show/status/in
 #### Scenario: Retrieve implementation instructions
 - **WHEN** an agent calls `openspec_instructions`
 - **THEN** the tool returns OpenSpec's enriched instructions for the requested artifact, schema, and optional change
+
+#### Scenario: Accept singular spec artifact alias
+- **WHEN** an agent calls `openspec_instructions` with artifact `spec`
+- **THEN** the tool treats it as the OpenSpec CLI artifact `specs`
+
+#### Scenario: Fresh repository instructions fallback
+- **GIVEN** a repository has been initialized but contains no changes
+- **WHEN** an agent calls `openspec_instructions` for a known artifact
+- **THEN** the tool returns `ok: true` with template-backed guidance for that artifact instead of failing only because no change exists
+
