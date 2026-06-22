@@ -24,7 +24,7 @@ This plugin closes both gaps:
 
 `openspec_context` and the lifecycle write tools (idea/change/task) are filesystem-backed and always available. `openspec_list`, `openspec_show`, `openspec_validate`, `openspec_status`, and `openspec_instructions` require the `openspec` CLI binary.
 
-For the full tool reference (what each does, when to call it, filesystem effects), see [docs/orchestration.md](docs/orchestration.md).
+For the full tool reference, lifecycle states, and delegation patterns, see [docs/orchestration.md](docs/orchestration.md).
 
 **Dashboard tab** (`/openspec`):
 
