@@ -154,7 +154,7 @@ OPENSPEC_INSTRUCTIONS = {
             "workdir": WORKDIR_PROP,
             "artifact": {
                 "type": "string",
-                "description": "Artifact/instruction name, e.g. proposal, design, tasks, spec, apply.",
+                "description": "Artifact/instruction name, e.g. proposal, design, tasks, specs, apply. 'spec' is accepted as an alias for 'specs'.",
             },
             "change": {"type": "string", "description": "Optional change id/name."},
             "schema": {"type": "string", "description": "Optional schema override."},

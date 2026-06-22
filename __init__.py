@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from . import schemas
-from . import tools
+try:
+    from . import schemas
+    from . import tools
+except ImportError:  # pragma: no cover - pytest may import the repo root as a top-level module
+    import schemas  # type: ignore
+    import tools  # type: ignore
 
 _TOOLS = (
     ("openspec_list", schemas.OPENSPEC_LIST, tools.openspec_list, "📋"),
