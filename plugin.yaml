@@ -1,0 +1,10 @@
+name: openspec
+version: 0.1.0
+description: OpenSpec CLI tools for spec-driven development workflows
+provides_tools:
+  - openspec_context
+  - openspec_list
+  - openspec_show
+  - openspec_validate
+  - openspec_status
+  - openspec_instructions

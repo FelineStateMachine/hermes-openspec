@@ -1,0 +1,14 @@
+{
+  "name": "openspec",
+  "label": "OpenSpec",
+  "description": "Spec-driven development board — register repos, drill into change proposals/tasks/designs/specs, browse current specs and branch diffs",
+  "icon": "Code",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/openspec",
+    "position": "after:skills"
+  },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}
