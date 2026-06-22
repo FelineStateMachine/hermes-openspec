@@ -262,20 +262,21 @@
             h("div", { className: "os-col-list" },
               items.length === 0 ? h("span", { className: "os-col-empty" }, "—") :
                 items.map(function (it) {
-                  var artifacts = [];
-                  if (it.hasProposal) artifacts.push({ c: "#60a5fa", label: "proposal" });
-                  if (it.hasTasks) artifacts.push({ c: "#34d399", label: "tasks" });
-                  if (it.hasDesign) artifacts.push({ c: "#a78bfa", label: "design" });
-                  if (it.hasSpecs) artifacts.push({ c: "#fbbf24", label: "specs" });
+                  var artifacts = [
+                    { on: it.hasProposal, c: "#60a5fa", label: "proposal" },
+                    { on: it.hasTasks, c: "#34d399", label: "tasks" },
+                    { on: it.hasDesign, c: "#a78bfa", label: "design" },
+                    { on: it.hasSpecs, c: "#fbbf24", label: "specs" },
+                  ];
                   var pct = it.taskStats && it.taskStats.total > 0 ? Math.round((it.taskStats.done / it.taskStats.total) * 100) : 0;
                   return h("button", {
                     key: it.id || it.name, className: cn("os-card", STATUS_TONE[it.status] || ""), onClick: function () { onSelectItem(it); },
                   },
                     h("div", { className: "os-card-title" }, it.title || it.name),
                     h("div", { className: "os-card-foot" },
-                      artifacts.length ? h("span", { className: "os-card-artifacts" },
-                        artifacts.map(function (a, i) { return h("span", { key: i, className: "os-card-dot", title: a.label, style: { background: a.c } }); })
-                      ) : null,
+                      h("span", { className: "os-card-artifacts" },
+                        artifacts.map(function (a, i) { return h("span", { key: i, className: cn("os-card-dot", !a.on && "os-card-dot-off"), title: a.label }); })
+                      ),
                       it.taskStats ? h("span", { className: "os-card-progress" },
                         h("span", { className: "os-card-progress-track" }, h("span", { className: "os-card-progress-fill", style: { width: pct + "%" } })),
                         h("span", { className: "os-card-stats" }, it.taskStats.done + "/" + it.taskStats.total)
@@ -396,6 +397,93 @@
     );
   }
 
+  // ── Spec content parser + structured view ───────────────────────────
+  function parseSpec(md) {
+    if (!md) return { title: "", purpose: "", requirements: [] };
+    var lines = md.split("\n");
+    var title = "", purpose = "";
+    var reqs = [];
+    var state = "top"; // top | purpose | reqDesc | scenario
+    var currentReq = null, currentScn = null;
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var trim = line.trim();
+
+      if (trim.startsWith("# ") && !trim.startsWith("## ")) {
+        title = trim.replace(/^#\s+/, "").replace(/\s+Specification\s*$/i, "");
+        state = "top"; continue;
+      }
+      if (/^##\s+Purpose/i.test(trim)) { state = "purpose"; continue; }
+      if (/^##\s+Requirements/i.test(trim)) { state = "top"; continue; }
+      if (/^###\s+Requirement:\s*(.+)$/i.test(trim)) {
+        var m = trim.match(/^###\s+Requirement:\s*(.+)$/i);
+        currentReq = { name: m[1].trim(), description: "", scenarios: [] };
+        reqs.push(currentReq);
+        currentScn = null;
+        state = "reqDesc"; continue;
+      }
+      if (/^####\s+Scenario:\s*(.+)$/i.test(trim)) {
+        var m2 = trim.match(/^####\s+Scenario:\s*(.+)$/i);
+        currentScn = { name: m2[1].trim(), steps: [] };
+        if (currentReq) currentReq.scenarios.push(currentScn);
+        state = "scenario"; continue;
+      }
+
+      // Accumulate text based on state
+      if (state === "purpose" && trim) {
+        purpose += (purpose ? "\n" : "") + trim;
+      } else if (state === "reqDesc" && trim) {
+        if (currentReq) currentReq.description += (currentReq.description ? "\n" : "") + trim;
+      } else if (state === "scenario" && trim) {
+        var step = trim.match(/^[-*]\s+\*\*(\w+)\*\*\s*(.+)$/);
+        if (step && currentScn) {
+          currentScn.steps.push({ type: step[1].toUpperCase(), text: step[2].trim() });
+        } else if (currentScn) {
+          // Non-bullet text inside scenario — append to last step or skip
+          if (currentScn.steps.length) {
+            currentScn.steps[currentScn.steps.length - 1].text += " " + trim;
+          }
+        }
+      }
+    }
+    return { title: title, purpose: purpose, requirements: reqs };
+  }
+
+  function SpecContentView(_ref) {
+    var md = _ref.md;
+    var spec = useMemo(function () { return parseSpec(md); }, [md]);
+    if (!spec.title && !spec.purpose && !spec.requirements.length) {
+      return h(Markdown, { md: md });
+    }
+    return h("div", { className: "os-spec-content" },
+      spec.purpose ? h("div", { className: "os-spec-purpose" },
+        h("div", { className: "os-spec-purpose-label" }, "Purpose"),
+        h("p", null, spec.purpose)
+      ) : null,
+      spec.requirements.map(function (req, ri) {
+        return h("div", { key: ri, className: "os-spec-req" },
+          h("div", { className: "os-spec-req-head" },
+            h("span", { className: "os-spec-req-num" }, "R" + (ri + 1)),
+            h("span", { className: "os-spec-req-name" }, req.name)
+          ),
+          req.description ? h("p", { className: "os-spec-req-desc" }, req.description) : null,
+          req.scenarios.map(function (scn, si) {
+            return h("div", { key: si, className: "os-spec-scn" },
+              h("div", { className: "os-spec-scn-name" }, scn.name),
+              scn.steps.map(function (st, sti) {
+                return h("div", { key: sti, className: cn("os-spec-step", "os-spec-step-" + st.type.toLowerCase()) },
+                  h("span", { className: "os-spec-step-label" }, st.type),
+                  h("span", { className: "os-spec-step-text" }, st.text)
+                );
+              })
+            );
+          })
+        );
+      })
+    );
+  }
+
   // ── Specs view (spec browser: current / dirty / refs) ────────────────
   var SORT_MODES = [
     { value: "alpha", label: "A→Z" },
@@ -509,7 +597,7 @@
                   selFile.ctime ? h("span", { title: selFile.ctime }, "created ", isoTimeAgo(selFile.ctime)) : null,
                   selFile.mtime ? h("span", { title: selFile.mtime }, "edited ", isoTimeAgo(selFile.mtime)) : null
                 ) : null,
-                mode === "current" ? h(Markdown, { md: selFile.after }) :
+                mode === "current" ? h(SpecContentView, { md: selFile.after }) :
                   h("div", { className: "os-spec-diff" },
                     h("div", { className: "os-diff-cols" },
                       h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "before"), h(Markdown, { md: selFile.before })),

@@ -45,7 +45,12 @@
 .os-card-copy { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem; border: none; background: transparent; color: var(--color-muted-foreground, #777); cursor: pointer; border-radius: var(--radius-sm, 0.25rem); }
 .os-card-copy:hover { color: var(--color-foreground, #eee); background: var(--color-secondary, rgba(255,255,255,0.06)); }
 .os-card-artifacts { display: inline-flex; align-items: center; gap: 0.25rem; }
-.os-card-dot { display: inline-block; width: 0.4375rem; height: 0.4375rem; border-radius: 50%; }
+.os-card-dot { display: inline-block; width: 0.4375rem; height: 0.4375rem; border-radius: 50%; background: var(--c, transparent); }
+.os-card-dot:nth-child(1) { --c: #60a5fa; }
+.os-card-dot:nth-child(2) { --c: #34d399; }
+.os-card-dot:nth-child(3) { --c: #a78bfa; }
+.os-card-dot:nth-child(4) { --c: #fbbf24; }
+.os-card-dot-off { --c: var(--color-muted-foreground, #555); opacity: 0.4; }
 .os-card-progress { display: flex; align-items: center; gap: 0.25rem; }
 .os-card-progress-track { width: 2.5rem; height: 0.25rem; border-radius: 0.125rem; background: var(--color-border, rgba(255,255,255,0.15)); overflow: hidden; }
 .os-card-progress-fill { display: block; height: 100%; border-radius: 0.125rem; background: var(--color-primary, #60a5fa); }
@@ -142,6 +147,25 @@
 .os-specs-detail-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
 .os-specs-detail-path { font-family: var(--theme-font-mono, monospace); font-size: 0.8rem; font-weight: 500; color: var(--color-foreground, #eee); }
 .os-specs-meta { display: flex; gap: 0.75rem; margin-bottom: 0.5rem; font-size: 0.7rem; color: var(--color-muted-foreground, #888); }
+
+/* Structured spec content */
+.os-spec-content { display: flex; flex-direction: column; gap: 1rem; }
+.os-spec-purpose { border-left: 3px solid var(--color-primary, #60a5fa); padding-left: 0.625rem; }
+.os-spec-purpose-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-muted-foreground, #777); margin-bottom: 0.25rem; }
+.os-spec-purpose p { margin: 0; font-size: 0.85rem; line-height: 1.5; color: var(--color-foreground, #eee); }
+.os-spec-req { border: 1px solid var(--color-border, #2a2a2a); border-radius: var(--radius-sm, 0.375rem); overflow: hidden; }
+.os-spec-req-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.625rem; background: var(--color-secondary, rgba(255,255,255,0.04)); }
+.os-spec-req-num { font-size: 0.65rem; font-weight: 700; font-family: var(--theme-font-mono, monospace); color: var(--color-primary, #60a5fa); background: color-mix(in srgb, var(--color-primary, #60a5fa) 12%, transparent); padding: 0.0625rem 0.3125rem; border-radius: var(--radius-sm, 0.25rem); }
+.os-spec-req-name { font-size: 0.82rem; font-weight: 600; color: var(--color-foreground, #eee); }
+.os-spec-req-desc { margin: 0; padding: 0.5rem 0.625rem; font-size: 0.8rem; line-height: 1.5; color: var(--color-muted-foreground, #bbb); }
+.os-spec-scn { margin: 0 0.625rem 0.5rem; padding: 0.5rem; border-left: 2px solid var(--color-border, #333); border-radius: 0 0.25rem 0.25rem 0; background: color-mix(in srgb, var(--color-secondary, rgba(255,255,255,0.03)) 50%, transparent); }
+.os-spec-scn-name { font-size: 0.75rem; font-weight: 600; color: var(--color-foreground, #ddd); margin-bottom: 0.375rem; }
+.os-spec-step { display: flex; align-items: flex-start; gap: 0.375rem; padding: 0.125rem 0; font-size: 0.76rem; line-height: 1.4; }
+.os-spec-step-label { flex-shrink: 0; font-size: 0.62rem; font-weight: 700; font-family: var(--theme-font-mono, monospace); min-width: 2.5rem; text-align: right; }
+.os-spec-step-text { flex: 1; color: var(--color-foreground, #ddd); }
+.os-spec-step-when .os-spec-step-label { color: #38bdf8; }
+.os-spec-step-then .os-spec-step-label { color: #2dd4bf; }
+.os-spec-step-and .os-spec-step-label { color: var(--color-muted-foreground, #888); }
 .os-diff-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem; }
 .os-diff-col { border: 1px solid var(--color-border, #2a2a2a); border-radius: var(--radius-sm, 0.375rem); padding: 0.5rem; overflow-x: auto; }
 .os-diff-col-head { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-muted-foreground, #777); margin-bottom: 0.375rem; }
