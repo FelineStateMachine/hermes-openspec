@@ -46,6 +46,9 @@
   function removeSource(id) {
     return fetchJSON(BASE + "/sources/" + encodeURIComponent(id), { method: "DELETE" });
   }
+  function initSource(id) {
+    return fetchJSON(BASE + "/sources/" + encodeURIComponent(id) + "/init", { method: "POST" });
+  }
   function getChange(sid, name) { return fetchJSON(BASE + "/sources/" + encodeURIComponent(sid) + "/changes/" + encodeURIComponent(name)); }
   function getIdea(sid, name) { return fetchJSON(BASE + "/sources/" + encodeURIComponent(sid) + "/ideas/" + encodeURIComponent(name)); }
   function getSpec(sid, path) { return fetchJSON(BASE + "/sources/" + encodeURIComponent(sid) + "/specs?path=" + encodeURIComponent(path)); }
@@ -298,7 +301,7 @@
 
   // ── Change / Idea detail dialog ──────────────────────────────────────
   function DetailDialog(_ref8) {
-    var source = _ref8.source, item = _ref8.item, onClose = _ref8.onClose;
+    var source = _ref8.source, item = _ref8.item, onClose = _ref8.onClose, anchor = _ref8.anchor, onTabChange = _ref8.onTabChange;
     var _d = useState(null), _l = useState(true), _e2 = useState("");
     var detail = _d[0], setDetail = _d[1], loading = _l[0], setLoading = _l[1], err = _e2[0], setErr = _e2[1];
     var isIdea = item.status === "ideas";
@@ -312,7 +315,7 @@
       loading ? h("p", { className: "os-empty" }, "Loading…") :
         err ? h("p", { className: "os-err" }, err) :
           isIdea ? h(Markdown, { md: detail && detail.content }) :
-            detail ? h(ChangeDetailTabs, { detail: detail }) : null
+            detail ? h(ChangeDetailTabs, { detail: detail, anchor: anchor, onTabChange: onTabChange }) : null
     );
   }
   // ── Task parser ─────────────────────────────────────────────────────
@@ -343,18 +346,59 @@
     return { sections: sections, total: total, done: done };
   }
 
+  function ChangeSpecsView(_ref11) {
+    var specs = _ref11.specs;
+    var _m = useState("proposed");
+    var mode = _m[0], setMode = _m[1];
+    return h("div", null,
+      h("div", { className: "os-specs-modes", style: { marginBottom: "0.5rem" } },
+        h(Button, { variant: mode === "proposed" ? "default" : "outline", size: "sm", onClick: function () { setMode("proposed"); } }, "Proposed"),
+        h(Button, { variant: mode === "diff" ? "default" : "outline", size: "sm", onClick: function () { setMode("diff"); } }, "Diff vs current")
+      ),
+      specs.map(function (s) {
+        return h("div", { key: s.path, className: "os-spec-block" },
+          h("div", { className: "os-specs-detail-head" },
+            h("span", { className: "os-specs-detail-path" }, s.path),
+            s.status && s.status !== "unchanged" && s.status !== "missing"
+              ? h(Badge, { className: "os-spec-status os-status-" + s.status }, s.status)
+              : null
+          ),
+          mode === "diff" && s.diff
+            ? h("div", { className: "os-spec-diff" },
+                h("div", { className: "os-diff-cols" },
+                  h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "current"), h(SpecContentView, { md: s.before })),
+                  h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "proposed"), h(SpecContentView, { md: s.content }))
+                ),
+                h("pre", { className: "os-diff-unified" }, s.diff)
+              )
+            : h(SpecContentView, { md: s.content })
+        );
+      })
+    );
+  }
+
   function ChangeDetailTabs(_ref9) {
-    var detail = _ref9.detail;
+    var detail = _ref9.detail, anchor = _ref9.anchor, onTabChange = _ref9.onTabChange;
     var tabs = [];
     if (detail.proposal) tabs.push(["proposal", "Proposal"]);
     if (detail.tasks) tabs.push(["tasks", "Tasks"]);
     if (detail.design) tabs.push(["design", "Design"]);
     if (detail.specs && detail.specs.length) tabs.push(["specs", "Specs (" + detail.specs.length + ")"]);
     if (!tabs.length) return h("p", { className: "os-empty" }, "No documents found.");
-    var _tab = useState(tabs[0][0]);
+    var validAnchor = anchor && tabs.some(function (t) { return t[0] === anchor; });
+    var initialTab = validAnchor ? anchor : tabs[0][0];
+    var _tab = useState(initialTab);
     var activeTab = _tab[0], setActiveTab = _tab[1];
+    // Sync from hash when anchor changes (browser back/forward).
+    useEffect(function () {
+      if (validAnchor && anchor !== activeTab) setActiveTab(anchor);
+    }, [anchor]);
+    function switchTab(t) {
+      setActiveTab(t);
+      if (onTabChange) onTabChange(t);
+    }
     var content = activeTab === "specs"
-      ? detail.specs.map(function (s) { return h("div", { key: s.path, className: "os-spec-block" }, h("h4", null, s.path), h(Markdown, { md: s.content })); })
+      ? h(ChangeSpecsView, { specs: detail.specs })
       : activeTab === "tasks"
         ? h(TasksView, { md: detail[activeTab], stats: detail.taskStats })
         : h(Markdown, { md: detail[activeTab] });
@@ -362,7 +406,7 @@
       h("div", { className: "os-tabs-bar" }, tabs.map(function (t) {
         return h("button", {
           key: t[0], className: cn("os-tab-btn", activeTab === t[0] && "os-tab-btn-active"),
-          onClick: function () { setActiveTab(t[0]); }
+          onClick: function () { switchTab(t[0]); }
         }, t[1]);
       })),
       h("div", { className: "os-tab-panel" }, content)
@@ -453,7 +497,7 @@
   function SpecContentView(_ref) {
     var md = _ref.md;
     var spec = useMemo(function () { return parseSpec(md); }, [md]);
-    if (!spec.title && !spec.purpose && !spec.requirements.length) {
+    if (!spec.requirements.length) {
       return h(Markdown, { md: md });
     }
     return h("div", { className: "os-spec-content" },
@@ -514,7 +558,7 @@
     return arr;
   }
   function SpecsView(_ref10) {
-    var source = _ref10.source, anchorToken = _ref10.anchorToken;
+    var source = _ref10.source, anchorToken = _ref10.anchorToken, onSelectToken = _ref10.onSelectToken;
     var _m = useState("current"), _b2 = useState(null), _l2 = useState(true), _e3 = useState("");
     var _sel = useState(null), _bf = useState(""), _af = useState("");
     var _sm = useState("alpha");
@@ -544,6 +588,12 @@
     useEffect(function () {
       if (firstLoad.current) { firstLoad.current = false; load(mode, before, after); }
     }, []);
+    // Sync selection when anchor token changes (browser back/forward + hash edits).
+    useEffect(function () {
+      if (!anchorToken || !browser || !browser.files) return;
+      var match = browser.files.find(function (f) { return f.token === anchorToken; });
+      if (match && match.path !== selPath) setSelPath(match.path);
+    }, [anchorToken, browser]);
     function switchMode(m) {
       setMode(m);
       if (m === "refs" && (!before.trim() || !after.trim())) { setBrowser(null); setLoading(false); return; }
@@ -580,7 +630,7 @@
                 sorted.map(function (f) {
                   return h("button", {
                     key: f.path, className: cn("os-spec-item", f.path === selPath && "os-spec-item-active", f.changed && "os-spec-item-changed"),
-                    onClick: function () { setSelPath(f.path); },
+                    onClick: function () { setSelPath(f.path); if (onSelectToken && f.token) onSelectToken(f.token); },
                   },
                     h(Icon, { d: ICO.file, size: 13 }),
                     h("span", { className: "os-spec-item-path" }, f.path),
@@ -638,15 +688,28 @@
   })(React.Component);
 
   // ── Hash deep-linking ────────────────────────────────────────────────
+  // Format: #project/token#anchor
+  //   - project/token is the route (which source + which change/spec)
+  //   - anchor is the sub-view (proposal/tasks/design/specs tab)
+  // The second # is a literal char in the hash string; we split on it.
   function parseHash() {
-    var h2 = window.location.hash.replace(/^#/, "").trim();
-    if (!h2) return { project: null, token: null };
-    var parts = h2.split("/");
-    return { project: decodeURIComponent(parts[0]) || null, token: parts[1] ? decodeURIComponent(parts[1]) : null };
+    var raw = window.location.hash.replace(/^#/, "").trim();
+    if (!raw) return { project: null, token: null, anchor: null };
+    var route, anchor;
+    var hi = raw.indexOf("#");
+    if (hi >= 0) { route = raw.slice(0, hi); anchor = raw.slice(hi + 1); }
+    else { route = raw; anchor = null; }
+    var parts = route.split("/");
+    return {
+      project: decodeURIComponent(parts[0]) || null,
+      token: parts[1] ? decodeURIComponent(parts[1]) : null,
+      anchor: anchor || null,
+    };
   }
-  function setHash(project, token) {
+  function setHash(project, token, anchor) {
     var v = project ? (token ? project + "/" + token : project) : "";
-    if (("#" + v) !== window.location.hash) window.location.hash = v;
+    if (anchor) v += "#" + anchor;
+    if ((window.location.hash || "#") !== "#" + v) window.location.hash = v;
   }
 
   // ── Main page component ──────────────────────────────────────────────
@@ -704,8 +767,10 @@
     var active = sources.find(function (s) { return s.id === activeId; });
 
     function selectSource(id) { setActiveId(id); var s = sources.find(function (x) { return x.id === id; }); setHash(s ? s.name : null, null); setView("board"); setSelItem(null); }
-    function selectItem(item) { setSelItem(item); if (active && item.token) setHash(active.name, item.token); }
+    function selectItem(item) { setSelItem(item); if (active && item.token) setHash(active.name, item.token, null); }
     function closeItem() { setSelItem(null); if (active) setHash(active.name, null); }
+    function onTabChange(tab) { if (active && selItem && selItem.token) setHash(active.name, selItem.token, tab); }
+    function selectSpec(token) { if (active) setHash(active.name, token, null); }
 
     function onAdd() { setDlg({ mode: "add" }); }
     function onEdit() { if (active) setDlg({ mode: "edit", activeId: active.id, path: active.path, name: active.name }); }
@@ -758,10 +823,17 @@
         h(Button, { variant: view === "board" ? "default" : "outline", size: "sm", onClick: function () { setView("board"); } }, "Changes"),
         h(Button, { variant: view === "specs" ? "default" : "outline", size: "sm", onClick: function () { setView("specs"); } }, "Specs")
       ) : null,
-      active && !active.valid ? h("p", { className: "os-err" }, active.error || "Source path is invalid.") : null,
+      active && !active.valid ? h("div", { className: "os-invalid-state" },
+        h("p", { className: "os-err" }, active.error || "Source path is invalid."),
+        active.error && active.error.toLowerCase().indexOf("openspec") >= 0 ? h(Button, {
+          size: "sm", onClick: function () {
+            initSource(active.id).then(function () { loadSources(true); }).catch(function (e) { setErr(apiErr(e)); });
+          }
+        }, h(Icon, { d: ICO.plus, size: 14 }), " Initialize OpenSpec") : null
+      ) : null,
       active && active.valid && view === "board" ? h(Board, { source: active, onSelectItem: selectItem }) : null,
-      active && active.valid && view === "specs" ? h(SpecsView, { source: active, anchorToken: anchor.token }) : null,
-      selItem && active ? h(DetailDialog, { source: active, item: selItem, onClose: closeItem }) : null,
+      active && active.valid && view === "specs" ? h(SpecsView, { source: active, anchorToken: anchor.token, onSelectToken: selectSpec }) : null,
+      selItem && active ? h(DetailDialog, { source: active, item: selItem, onClose: closeItem, anchor: anchor.anchor, onTabChange: onTabChange }) : null,
       dlg ? h(SourceDialog, {
         mode: dlg.mode, initialPath: dlg.path, initialName: dlg.name, activeId: dlg.activeId,
         onClose: function () { setDlg(null); }, onSaved: onSaved,

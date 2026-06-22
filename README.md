@@ -29,9 +29,10 @@ This plugin closes both gaps:
 **Dashboard tab** (`/openspec`):
 
 - Register repos by path — each gets a vanity name and stable tokens (`name/os_a1b2c3`).
-- **Changes view** — Kanban-style board: ideas → draft → todo → in_progress → done → archived. Click any change to read its proposal, tasks, design, and spec deltas.
+- **Changes view** — Kanban-style board: ideas → draft → todo → in_progress → done → archived. Click any change to read its proposal, tasks, design, and spec deltas. Spec deltas render side-by-side (current vs proposed) with structured requirement/scenario parsing.
 - **Specs view** — browse current specs in the worktree, sorted alphabetically or by last git commit date. Compare against HEAD (dirty mode) or arbitrary git refs (before/after).
-- Deep-linking via URL hash (`#project-name/token`).
+- **Source initialization** — register a repo before it has an `openspec/` directory, then initialize it from the dashboard (runs `openspec init --tools none`, or creates the directory structure as a fallback).
+- Deep-linking via URL hash (`#project-name/token#anchor` — the second `#` selects a tab: proposal, tasks, design, or specs).
 
 ![Change board](screenshots/board.png)
 
@@ -61,7 +62,7 @@ To register a repo in the dashboard, open the OpenSpec tab and click **Add sourc
 openspec_context(identifier="/path/to/your/repo")
 ```
 
-The repo needs an `openspec/` directory. Once registered, the dashboard shows changes and specs live from the filesystem.
+The repo doesn't need an `openspec/` directory upfront — if it's missing, the dashboard shows an **Initialize** button that creates it. Once initialized, the dashboard shows changes and specs live from the filesystem.
 
 ## Verify
 
@@ -116,4 +117,3 @@ hermes-openspec/
 | `dashboard/plugin_api.py` | All backend API routes and the spec-browser logic |
 | `dashboard/manifest.json` | Tab registration, entry points |
 | `dashboard/dist/index.js` | Frontend: board, specs view, source dialogs, deep-linking |
-```

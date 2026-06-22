@@ -1,0 +1,11 @@
+# hermes-openspec Python dependencies
+#
+# These are the third-party packages used by the plugin. They are already
+# installed as part of the Hermes Agent runtime, so you do NOT need to
+# install them separately unless you are developing outside Hermes.
+#
+# Hermes-internal modules (hermes_constants, hermes_cli.config) are provided
+# by the host Hermes installation and are not pip-installable.
+
+fastapi>=0.100
+pydantic>=2.0
