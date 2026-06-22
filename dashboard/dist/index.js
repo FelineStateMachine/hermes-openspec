@@ -500,7 +500,7 @@
                   )
               ) : h("p", { className: "os-empty" }, "Select a spec.")
             );
-          })() : h("p", { className: "os-empty" }, "No specs found.")
+          })() : h("p", { className: "os-empty" }, mode === "dirty" ? "No changes between HEAD and worktree." : mode === "refs" ? "No differences between refs." : "No specs found.")
     );
   }
 

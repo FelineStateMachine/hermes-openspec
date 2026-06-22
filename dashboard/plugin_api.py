@@ -607,6 +607,10 @@ def _spec_browser(root: Path, before: str = "", after: str = "", dirty: bool = F
             mtime = None
             ctime = None
         status = _spec_status(before_content, after_content)
+        # In dirty mode, skip unchanged specs — only show what's actually
+        # different between HEAD and the worktree.
+        if dirty_mode and status in ("unchanged", "missing"):
+            continue
         files.append({
             "path": rel,
             "token": _change_token(f"spec:{rel}"),
