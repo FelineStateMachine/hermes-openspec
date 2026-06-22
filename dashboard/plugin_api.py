@@ -348,12 +348,21 @@ def _change_detail(root: Path, change_name: str) -> Optional[dict[str, Any]]:
     specs_root = change_dir / "specs"
     has_tasks = tasks_path.is_file()
     stats = _task_stats(tasks_path) if has_tasks else None
-    specs: list[dict[str, str]] = []
+    specs: list[dict[str, Any]] = []
     if specs_root.is_dir():
         try:
             for child in sorted(specs_root.rglob("*.md")):
                 rel = child.relative_to(specs_root).as_posix()
-                specs.append({"path": rel, "content": _read_doc(child) or ""})
+                after = _read_doc(child) or ""
+                before = _read_worktree_spec(root, rel)
+                status = _spec_status(before, after)
+                specs.append({
+                    "path": rel,
+                    "content": after,
+                    "before": before,
+                    "status": status,
+                    "diff": _spec_diff(before, after, rel) if status not in ("unchanged", "missing") else "",
+                })
         except OSError:
             pass
     return {
