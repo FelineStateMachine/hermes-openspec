@@ -8,3 +8,12 @@ provides_tools:
   - openspec_validate
   - openspec_status
   - openspec_instructions
+  - openspec_idea_create
+  - openspec_idea_enrich
+  - openspec_idea_promote
+  - openspec_task_list
+  - openspec_task_set_status
+  - openspec_change_create
+  - openspec_change_promote
+  - openspec_change_archive
+  - openspec_change_unarchive

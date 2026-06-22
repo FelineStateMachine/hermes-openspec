@@ -161,3 +161,138 @@ OPENSPEC_INSTRUCTIONS = {
         },
     },
 }
+
+PROJECT_PROPS = {
+    "workdir": WORKDIR_PROP,
+    "identifier": {
+        "type": "string",
+        "description": "Optional registered OpenSpec source identifier/name. Used when workdir is not supplied.",
+    },
+    "project": {
+        "type": "string",
+        "description": "Alias for identifier: a registered OpenSpec source name or token.",
+    },
+}
+
+OPENSPEC_IDEA_CREATE = {
+    "name": "openspec_idea_create",
+    "description": "Create a markdown idea under openspec/ideas from a title and prompt.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            **PROJECT_PROPS,
+            "title": {"type": "string", "description": "Idea title."},
+            "prompt": {"type": "string", "description": "Raw human/agent idea text to preserve."},
+            "origin": {"type": "string", "description": "Idea origin, e.g. human, agent, or mixed."},
+            "source": {"type": "string", "description": "Alias for origin."},
+            "tags": {"type": "array", "items": {"type": "string"}},
+            "notes": {"type": "string"},
+            "slug": {"type": "string", "description": "Optional preferred file slug."},
+        },
+        "required": ["title", "prompt"],
+    },
+}
+
+OPENSPEC_IDEA_ENRICH = {
+    "name": "openspec_idea_enrich",
+    "description": "Write or update a structured enrichment report for an existing OpenSpec idea.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            **PROJECT_PROPS,
+            "idea": {"type": "string", "description": "Idea slug/name under openspec/ideas without .md."},
+            "slug": {"type": "string", "description": "Alias for idea."},
+            "problem": {"type": "string"},
+            "proposed_direction": {"type": "string"},
+            "key_questions": {"type": "array", "items": {"type": "string"}},
+            "feasibility": {"type": "string", "enum": ["Low", "Medium", "High"]},
+            "tshirt_size": {"type": "string", "enum": ["XS", "S", "M", "L", "XL"]},
+            "size_justification": {"type": "string"},
+            "risks": {"type": "array", "items": {"type": "string"}},
+            "suggested_next_step": {"type": "string"},
+        },
+        "required": ["idea"],
+    },
+}
+
+OPENSPEC_IDEA_PROMOTE = {
+    "name": "openspec_idea_promote",
+    "description": "Promote an existing OpenSpec idea into a new change scaffold with traceability.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            **PROJECT_PROPS,
+            "idea": {"type": "string"},
+            "slug": {"type": "string", "description": "Alias for idea."},
+            "change": {"type": "string", "description": "Kebab-case OpenSpec change id to create."},
+            "change_id": {"type": "string", "description": "Alias for change."},
+            "summary": {"type": "string"},
+            "force": {"type": "boolean"},
+        },
+        "required": ["idea", "change"],
+    },
+}
+
+OPENSPEC_TASK_LIST = {
+    "name": "openspec_task_list",
+    "description": "List checklist tasks for an OpenSpec change with ids, text, status, and counts.",
+    "parameters": {"type": "object", "properties": {**PROJECT_PROPS, "change": {"type": "string"}, "change_id": {"type": "string"}}, "required": ["change"]},
+}
+
+OPENSPEC_TASK_SET_STATUS = {
+    "name": "openspec_task_set_status",
+    "description": "Set selected checklist task ids in an OpenSpec change to todo or done.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            **PROJECT_PROPS,
+            "change": {"type": "string"},
+            "change_id": {"type": "string"},
+            "tasks": {"type": "array", "items": {"type": "string"}},
+            "task_ids": {"type": "array", "items": {"type": "string"}},
+            "status": {"type": "string", "enum": ["todo", "done"]},
+        },
+        "required": ["change", "tasks", "status"],
+    },
+}
+
+OPENSPEC_CHANGE_CREATE = {
+    "name": "openspec_change_create",
+    "description": "Create a draft OpenSpec change scaffold directly from title/summary and optional tasks/spec placeholder.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            **PROJECT_PROPS,
+            "change": {"type": "string"},
+            "change_id": {"type": "string"},
+            "title": {"type": "string"},
+            "summary": {"type": "string"},
+            "tasks": {"type": "array", "items": {"type": "string"}},
+            "with_spec": {"type": "boolean"},
+            "force": {"type": "boolean"},
+        },
+        "required": ["change", "title", "summary"],
+    },
+}
+
+OPENSPEC_CHANGE_PROMOTE = {
+    "name": "openspec_change_promote",
+    "description": "Promote a draft OpenSpec change to todo by ensuring tasks and a valid spec placeholder exist.",
+    "parameters": {
+        "type": "object",
+        "properties": {**PROJECT_PROPS, "change": {"type": "string"}, "change_id": {"type": "string"}, "tasks": {"type": "array", "items": {"type": "string"}}, "replace_tasks": {"type": "boolean"}},
+        "required": ["change"],
+    },
+}
+
+OPENSPEC_CHANGE_ARCHIVE = {
+    "name": "openspec_change_archive",
+    "description": "Archive a completed OpenSpec change, refusing incomplete tasks unless force is true.",
+    "parameters": {"type": "object", "properties": {**PROJECT_PROPS, "change": {"type": "string"}, "change_id": {"type": "string"}, "force": {"type": "boolean"}}, "required": ["change"]},
+}
+
+OPENSPEC_CHANGE_UNARCHIVE = {
+    "name": "openspec_change_unarchive",
+    "description": "Move an archived OpenSpec change back to the active changes directory.",
+    "parameters": {"type": "object", "properties": {**PROJECT_PROPS, "change": {"type": "string"}, "change_id": {"type": "string"}, "force": {"type": "boolean"}}, "required": ["change"]},
+}
