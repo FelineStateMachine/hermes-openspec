@@ -50,11 +50,11 @@
 .os-card-progress-fill { display: block; height: 100%; border-radius: 0.125rem; background: var(--color-primary, #60a5fa); }
 .os-card-stats { font-size: 0.68rem; color: var(--color-muted-foreground, #aaa); }
 
-.os-tone-ideas { border-left: 3px solid #a78bfa; }
+.os-tone-ideas { border-left: 3px solid #c084fc; }
 .os-tone-draft { border-left: 3px solid var(--color-muted-foreground, #6b7280); }
-.os-tone-todo { border-left: 3px solid #60a5fa; }
-.os-tone-progress { border-left: 3px solid #fbbf24; }
-.os-tone-done { border-left: 3px solid #34d399; }
+.os-tone-todo { border-left: 3px solid #38bdf8; }
+.os-tone-progress { border-left: 3px solid #fb923c; }
+.os-tone-done { border-left: 3px solid #2dd4bf; }
 .os-tone-archived { border-left: 3px solid var(--color-muted-foreground, #4b5563); opacity: 0.7; }
 
 /* Chip */
