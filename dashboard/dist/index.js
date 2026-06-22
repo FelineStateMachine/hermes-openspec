@@ -23,6 +23,7 @@
   var useState = SDK.hooks.useState, useEffect = SDK.hooks.useEffect;
   var useCallback = SDK.hooks.useCallback, useMemo = SDK.hooks.useMemo, useRef = SDK.hooks.useRef;
   var cn = SDK.utils.cn;
+  var isoTimeAgo = SDK.utils.isoTimeAgo;
   var fetchJSON = SDK.fetchJSON;
 
   var BASE = "/api/plugins/openspec";
@@ -425,6 +426,10 @@
                   h("span", { className: "os-specs-detail-path" }, selFile.path),
                   selFile.token ? h(CopyChip, { text: source.name + "/" + selFile.token }) : null
                 ),
+                (selFile.ctime || selFile.mtime) ? h("div", { className: "os-specs-meta" },
+                  selFile.ctime ? h("span", { title: selFile.ctime }, "created ", isoTimeAgo(selFile.ctime)) : null,
+                  selFile.mtime ? h("span", { title: selFile.mtime }, "edited ", isoTimeAgo(selFile.mtime)) : null
+                ) : null,
                 mode === "current" ? h(Markdown, { md: selFile.after }) :
                   h("div", { className: "os-spec-diff" },
                     h("div", { className: "os-diff-cols" },

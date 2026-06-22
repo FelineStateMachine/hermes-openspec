@@ -476,11 +476,13 @@ def _worktree_spec_mtime(root: Path, spec_path: str) -> Optional[str]:
         return None
 
 
-def _spec_git_mtimes(root: Path) -> dict[str, str]:
-    """Return ``{rel_path: iso_date}`` for the last commit touching each spec.
+def _spec_git_dates(root: Path) -> dict[str, dict[str, str]]:
+    """Return ``{rel_path: {"mtime": iso, "ctime": iso}}`` for each spec.
 
-    Uses a single ``git log`` call and returns the most recent commit date
-    per file. Falls back to an empty dict if git is unavailable.
+    Uses a single ``git log`` call (newest-first). The first time a file
+    appears is its most recent commit (mtime); the last time is the oldest
+    commit (ctime / creation date). Falls back to an empty dict if git is
+    unavailable.
     """
     text = _git_output(
         root,
@@ -490,18 +492,22 @@ def _spec_git_mtimes(root: Path) -> dict[str, str]:
     if not text:
         return {}
     prefix = "openspec/specs/"
-    mtimes: dict[str, str] = {}
+    dates: dict[str, dict[str, str]] = {}
     current_date: Optional[str] = None
     for line in text.splitlines():
         if not line:
             continue
         if line.startswith(prefix):
             rel = line[len(prefix):]
-            if rel.endswith(".md") and current_date and rel not in mtimes:
-                mtimes[rel] = current_date
+            if not rel.endswith(".md") or not current_date:
+                continue
+            if rel not in dates:
+                dates[rel] = {"mtime": current_date, "ctime": current_date}
+            else:
+                dates[rel]["ctime"] = current_date
         else:
             current_date = line.strip()
-    return mtimes
+    return dates
 
 
 def _read_ref_spec(root: Path, ref: str, spec_path: str) -> Optional[str]:
@@ -571,18 +577,20 @@ def _spec_browser(root: Path, before: str = "", after: str = "", dirty: bool = F
 
     files: list[dict[str, Any]] = []
     # Pre-fetch git commit dates for all specs in one call (current/dirty modes).
-    git_mtimes = _spec_git_mtimes(root) if mode in ("current", "dirty") else {}
+    git_dates = _spec_git_dates(root) if mode in ("current", "dirty") else {}
     for rel in sorted(set(before_paths) | set(after_paths)):
         if mode == "current":
             # No comparison — just showing the current worktree state.
             after_content = _read_worktree_spec(root, rel)
+            gd = git_dates.get(rel, {})
             files.append({
                 "path": rel,
                 "token": _change_token(f"spec:{rel}"),
                 "title": _spec_title_from_content(after_content, rel),
                 "status": "current" if after_content is not None else "missing",
                 "changed": False,
-                "mtime": git_mtimes.get(rel) or _worktree_spec_mtime(root, rel),
+                "mtime": gd.get("mtime") or _worktree_spec_mtime(root, rel),
+                "ctime": gd.get("ctime"),
                 "before": None,
                 "after": after_content,
                 "diff": "",
@@ -591,10 +599,13 @@ def _spec_browser(root: Path, before: str = "", after: str = "", dirty: bool = F
         before_content = _read_ref_spec(root, before_ref, rel) if before_ref else None
         if dirty_mode:
             after_content = _read_worktree_spec(root, rel)
-            mtime = git_mtimes.get(rel) or _worktree_spec_mtime(root, rel)
+            gd = git_dates.get(rel, {})
+            mtime = gd.get("mtime") or _worktree_spec_mtime(root, rel)
+            ctime = gd.get("ctime")
         else:
             after_content = _read_ref_spec(root, after_ref, rel)
             mtime = None
+            ctime = None
         status = _spec_status(before_content, after_content)
         files.append({
             "path": rel,
@@ -603,6 +614,7 @@ def _spec_browser(root: Path, before: str = "", after: str = "", dirty: bool = F
             "status": status,
             "changed": status not in {"unchanged", "missing"},
             "mtime": mtime,
+            "ctime": ctime,
             "before": before_content,
             "after": after_content,
             "diff": _spec_diff(before_content, after_content, rel) if status not in {"unchanged", "missing"} else "",
