@@ -263,10 +263,10 @@
               items.length === 0 ? h("span", { className: "os-col-empty" }, "—") :
                 items.map(function (it) {
                   var artifacts = [];
-                  if (it.hasProposal) artifacts.push({ d: ICO.proposal, label: "proposal" });
-                  if (it.hasTasks) artifacts.push({ d: ICO.tasks, label: "tasks" });
-                  if (it.hasDesign) artifacts.push({ d: ICO.design, label: "design" });
-                  if (it.hasSpecs) artifacts.push({ d: ICO.specs, label: "specs" });
+                  if (it.hasProposal) artifacts.push({ c: "#60a5fa", label: "proposal" });
+                  if (it.hasTasks) artifacts.push({ c: "#34d399", label: "tasks" });
+                  if (it.hasDesign) artifacts.push({ c: "#a78bfa", label: "design" });
+                  if (it.hasSpecs) artifacts.push({ c: "#fbbf24", label: "specs" });
                   var pct = it.taskStats && it.taskStats.total > 0 ? Math.round((it.taskStats.done / it.taskStats.total) * 100) : 0;
                   return h("button", {
                     key: it.id || it.name, className: cn("os-card", STATUS_TONE[it.status] || ""), onClick: function () { onSelectItem(it); },
@@ -274,7 +274,7 @@
                     h("div", { className: "os-card-title" }, it.title || it.name),
                     h("div", { className: "os-card-foot" },
                       artifacts.length ? h("span", { className: "os-card-artifacts" },
-                        artifacts.map(function (a, i) { return h(Icon, { key: i, d: a.d, size: 11, title: a.label }); })
+                        artifacts.map(function (a, i) { return h("span", { key: i, className: "os-card-dot", title: a.label, style: { background: a.c } }); })
                       ) : null,
                       it.taskStats ? h("span", { className: "os-card-progress" },
                         h("span", { className: "os-card-progress-track" }, h("span", { className: "os-card-progress-fill", style: { width: pct + "%" } })),
