@@ -24,12 +24,15 @@ something that doesn't fit the design.
 
 ### Branches
 
-- `main` is a blank orphan branch — do not push to it.
-- All development happens on `dev`. Branch from `dev`, PR into `dev`.
+This repo uses trunk-based development on `main`:
+
+- `main` is the only long-lived branch. All PRs target `main`.
+- Branch short-lived feature branches off `main`, PR back, delete after merge.
+- Releases are tagged on `main` (`v0.1.0`, `v1.0.0`, …). No release branch.
 
 ### What we look for
 
-- **Fix real bugs.** Reproduce the symptom on `dev`, point to the exact line,
+- **Fix real bugs.** Reproduce the symptom on `main`, point to the exact line,
   and fix the whole bug class — not just the one site you hit.
 - **Keep the core narrow.** This plugin extends Hermes at the edge. Don't add
   hooks, callbacks, or extension points with no concrete consumer.
