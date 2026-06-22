@@ -1,6 +1,6 @@
 # Tool Reference
 
-Two perspectives on the same 15 tools. Use whichever table matches what you
+Two perspectives on the same 16 tools. Use whichever table matches what you
 already know.
 
 ## Artifact → tool mapping
