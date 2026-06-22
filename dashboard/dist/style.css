@@ -47,7 +47,7 @@
 .os-card-artifacts { display: inline-flex; align-items: center; gap: 0.25rem; }
 .os-card-dot { display: inline-block; width: 0.4375rem; height: 0.4375rem; border-radius: 50%; }
 .os-card-progress { display: flex; align-items: center; gap: 0.25rem; }
-.os-card-progress-track { width: 2.5rem; height: 0.25rem; border-radius: 0.125rem; background: var(--color-secondary, rgba(255,255,255,0.08)); overflow: hidden; }
+.os-card-progress-track { width: 2.5rem; height: 0.25rem; border-radius: 0.125rem; background: var(--color-border, rgba(255,255,255,0.15)); overflow: hidden; }
 .os-card-progress-fill { display: block; height: 100%; border-radius: 0.125rem; background: var(--color-primary, #60a5fa); }
 .os-card-stats { font-size: 0.68rem; color: var(--color-muted-foreground, #aaa); }
 
