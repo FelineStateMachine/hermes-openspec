@@ -90,7 +90,7 @@
 .os-md li { margin: 0.125rem 0; }
 .os-md .os-code { font-family: var(--theme-font-mono, monospace); font-size: 0.82em; color: color-mix(in srgb, var(--midground, var(--color-foreground, inherit)) 90%, transparent); background: var(--color-secondary, color-mix(in srgb, var(--midground-base, currentColor) 8%, transparent)); padding: 0.0625rem 0.25rem; border-radius: var(--radius-sm, 0.1875rem); }
 .os-md .os-pre { background: var(--color-secondary, #0e0e0e); border: 1px solid var(--color-border, #2a2a2a); border-radius: var(--radius-sm, 0.375rem); padding: 0.625rem; overflow-x: auto; margin: 0.5rem 0; }
-.os-md .os-pre code { font-family: var(--theme-font-mono, monospace); font-size: 0.78rem; color: var(--color-foreground, #eee); }
+.os-md .os-pre code { font-family: var(--theme-font-mono, monospace); font-size: 0.78rem; color: var(--color-foreground, #eee); background: unset; }
 .os-md .os-hr { border: none; border-top: 1px solid var(--color-border, #2a2a2a); margin: 0.75rem 0; }
 .os-md a { color: var(--color-primary, #60a5fa); text-decoration: underline; }
 
