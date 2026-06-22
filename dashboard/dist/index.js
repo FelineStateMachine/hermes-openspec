@@ -280,7 +280,11 @@
                         h("span", { className: "os-card-progress-track" }, h("span", { className: "os-card-progress-fill", style: { width: pct + "%" } })),
                         h("span", { className: "os-card-stats" }, it.taskStats.done + "/" + it.taskStats.total)
                       ) : null,
-                      it.token ? h(CopyChip, { text: source.name + "/" + it.token }) : null
+                      it.token ? h("button", {
+                        className: "os-card-copy",
+                        title: "Copy: " + source.name + "/" + it.token,
+                        onClick: function (e) { e.stopPropagation(); navigator.clipboard.writeText(source.name + "/" + it.token); }
+                      }, h(Icon, { d: ICO.copy, size: 12 })) : null
                     )
                   );
                 })

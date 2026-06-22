@@ -42,10 +42,11 @@
 .os-card:hover { border-color: var(--color-primary, #555); }
 .os-card-title { font-size: 0.82rem; font-weight: 500; line-height: 1.3; color: var(--color-foreground, #eee); }
 .os-card-foot { display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; }
-.os-card-foot .os-chip { width: 100%; margin-top: 0.125rem; }
+.os-card-copy { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem; border: none; background: transparent; color: var(--color-muted-foreground, #777); cursor: pointer; border-radius: var(--radius-sm, 0.25rem); }
+.os-card-copy:hover { color: var(--color-foreground, #eee); background: var(--color-secondary, rgba(255,255,255,0.06)); }
 .os-card-artifacts { display: inline-flex; align-items: center; gap: 0.25rem; }
 .os-card-dot { display: inline-block; width: 0.4375rem; height: 0.4375rem; border-radius: 50%; }
-.os-card-progress { display: flex; align-items: center; gap: 0.25rem; margin-left: auto; }
+.os-card-progress { display: flex; align-items: center; gap: 0.25rem; }
 .os-card-progress-track { width: 2.5rem; height: 0.25rem; border-radius: 0.125rem; background: var(--color-secondary, rgba(255,255,255,0.08)); overflow: hidden; }
 .os-card-progress-fill { display: block; height: 100%; border-radius: 0.125rem; background: var(--color-primary, #60a5fa); }
 .os-card-stats { font-size: 0.68rem; color: var(--color-muted-foreground, #aaa); }
