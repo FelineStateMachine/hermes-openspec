@@ -12,6 +12,8 @@ from typing import Any
 
 MAX_OUTPUT_CHARS = 50_000
 
+_ARTIFACT_ALIASES = {"spec": "specs"}
+
 
 def _openspec_bin() -> str | None:
     configured = os.getenv("OPENSPEC_BIN", "").strip()
@@ -46,6 +48,11 @@ def _json_or_text(text: str) -> Any:
         return json.loads(stripped)
     except Exception:
         return stripped
+
+
+def _normalize_artifact(value: str) -> str:
+    artifact = (value or "").strip()
+    return _ARTIFACT_ALIASES.get(artifact, artifact)
 
 
 def _run(args: list[str], workdir: Any = None) -> str:
@@ -102,6 +109,46 @@ def _run(args: list[str], workdir: Any = None) -> str:
         "stderr": _json_or_text(stderr),
         "truncated": len(proc.stdout) > MAX_OUTPUT_CHARS or len(proc.stderr) > MAX_OUTPUT_CHARS,
     })
+
+
+def _template_instruction_fallback(artifact: str, reason: str, workdir: Any = None, schema: str = "") -> str | None:
+    """Return template-backed instructions when OpenSpec needs a change first."""
+    if "No changes found" not in reason:
+        return None
+    artifact = _normalize_artifact(artifact)
+    if not artifact:
+        return None
+
+    templates_args = ["templates", "--json"]
+    if schema:
+        templates_args.extend(["--schema", schema])
+    templates_result = json.loads(_run(templates_args, workdir))
+    if not templates_result.get("ok") or not isinstance(templates_result.get("stdout"), dict):
+        return None
+
+    entry = templates_result["stdout"].get(artifact)
+    if not isinstance(entry, dict):
+        return None
+    path = Path(str(entry.get("path") or "")).expanduser()
+    if not path.is_file():
+        return None
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+    fallback = dict(templates_result)
+    fallback["ok"] = True
+    fallback["stdout"] = {
+        "artifact": artifact,
+        "fallback": "template",
+        "reason": reason,
+        "templatePath": str(path),
+        "source": entry.get("source"),
+        "content": content,
+    }
+    fallback["stderr"] = ""
+    return json.dumps(fallback)
 
 
 def _registry_module():
@@ -338,7 +385,7 @@ def openspec_status(args: dict, **kwargs) -> str:
 
 def openspec_instructions(args: dict, **kwargs) -> str:
     cmd = ["instructions", "--json"]
-    artifact = str(args.get("artifact") or "").strip()
+    artifact = _normalize_artifact(str(args.get("artifact") or ""))
     if artifact:
         cmd.append(artifact)
     change = str(args.get("change") or "").strip()
@@ -347,4 +394,11 @@ def openspec_instructions(args: dict, **kwargs) -> str:
     schema = str(args.get("schema") or "").strip()
     if schema:
         cmd.extend(["--schema", schema])
-    return _run(cmd, args.get("workdir"))
+
+    result = _run(cmd, args.get("workdir"))
+    parsed = json.loads(result)
+    if parsed.get("ok"):
+        return result
+    reason = "\n".join(str(parsed.get(key) or "") for key in ("stderr", "stdout", "error"))
+    fallback = _template_instruction_fallback(artifact, reason, args.get("workdir"), schema)
+    return fallback or result

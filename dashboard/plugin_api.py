@@ -351,6 +351,14 @@ def _source_payload(source: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _ensure_openspec_layout(root: Path) -> None:
+    """Create every OpenSpec directory root used by this plugin."""
+    openspec_root = root / "openspec"
+    (openspec_root / "changes" / "archive").mkdir(parents=True, exist_ok=True)
+    (openspec_root / "specs").mkdir(parents=True, exist_ok=True)
+    (openspec_root / "ideas").mkdir(parents=True, exist_ok=True)
+
+
 # ---------------------------------------------------------------------------
 # Detail helpers
 # ---------------------------------------------------------------------------
@@ -803,14 +811,10 @@ def init_source(source_id: str):
                 raise HTTPException(status_code=500, detail=f"openspec init failed: {detail}")
         except subprocess.TimeoutExpired:
             raise HTTPException(status_code=504, detail="openspec init timed out")
-    else:
-        # Fallback: create the minimal directory structure.
-        try:
-            (root / "openspec" / "changes").mkdir(parents=True, exist_ok=True)
-            (root / "openspec" / "specs").mkdir(parents=True, exist_ok=True)
-            (root / "openspec" / "ideas").mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"Failed to create openspec/ structure: {exc}")
+    try:
+        _ensure_openspec_layout(root)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to create openspec/ structure: {exc}")
     return {"ok": True, "message": "OpenSpec initialized", "source": _source_payload(source)}
 
 
