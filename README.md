@@ -13,27 +13,18 @@ This plugin closes both gaps:
 
 ## What you get
 
-**Agent tools** — 15 tools covering the full OpenSpec lifecycle:
+**Agent tools** — 15 tools covering the full OpenSpec lifecycle: idea capture and enrichment, change creation/promotion/archival, task tracking, spec validation, and context resolution.
 
-| Tool | Does |
+| Group | Tools |
 |---|---|
-| `openspec_context` | Resolve a copyable identifier (`puzzletea`, `puzzletea/os_a1b2c3`) into repo path and change/spec content. Always call this first when the user gives you an `os_` identifier — it returns the `workdir` the other tools need. |
-| `openspec_list` | List changes or specs in a project (sorted by recent or name). Call before picking a change or spec to inspect, validate, or coordinate with kanban. |
-| `openspec_show` | Show a change or spec as JSON — proposal, tasks, design, spec deltas, requirements, and scenarios. Call to read the full content of a specific change or spec. |
-| `openspec_validate` | Validate OpenSpec artifacts (a single target, or all changes/specs). Call after editing specs/proposals/tasks or before completing kanban tasks tied to OpenSpec work. |
-| `openspec_status` | Show artifact completion status for a change as JSON (which artifacts exist, which are missing, readiness). Call to turn proposal/task progress into kanban updates. |
-| `openspec_instructions` | Return enriched instructions for creating an artifact (proposal, design, tasks, specs) or applying a change. Call before implementing a spec-driven change to get the authoring guide. |
-| `openspec_idea_create` | Create a markdown idea under `openspec/ideas/` from a title and raw prompt text. Call to capture a feature idea before it's been scoped or evaluated. |
-| `openspec_idea_enrich` | Write or update a structured enrichment report for an existing idea — problem statement, proposed direction, feasibility, T-shirt size, risks, key questions, and next step. Call to evaluate whether an idea is worth promoting. |
-| `openspec_idea_promote` | Promote an idea into a new OpenSpec change scaffold with proposal/tasks/spec traceability. Call when an enriched idea is ready to become an actionable change. |
-| `openspec_task_list` | List checklist tasks for a change — task ids, text, status, and completion counts. Call before marking tasks done or to see what's left. |
-| `openspec_task_set_status` | Set selected task ids in a change to `todo` or `done`. Call to update progress as you complete work items. |
-| `openspec_change_create` | Create a draft OpenSpec change scaffold directly from a title/summary (optional tasks and spec placeholder). Call to start a new change without going through the idea pipeline. |
-| `openspec_change_promote` | Promote a draft change to `todo` by ensuring tasks and a valid spec placeholder exist. Call when a draft is ready for implementation. |
-| `openspec_change_archive` | Archive a completed change, refusing if tasks are incomplete unless `force` is set. Call when a change is done and should be moved out of the active board. |
-| `openspec_change_unarchive` | Move an archived change back to the active changes directory. Call to reopen a change that was archived prematurely. |
+| Context & reads | `openspec_context`, `openspec_list`, `openspec_show`, `openspec_status`, `openspec_validate`, `openspec_instructions` |
+| Ideas | `openspec_idea_create`, `openspec_idea_enrich`, `openspec_idea_promote` |
+| Changes | `openspec_change_create`, `openspec_change_promote`, `openspec_change_archive`, `openspec_change_unarchive` |
+| Tasks | `openspec_task_list`, `openspec_task_set_status` |
 
 `openspec_context` and the lifecycle write tools (idea/change/task) are filesystem-backed and always available. `openspec_list`, `openspec_show`, `openspec_validate`, `openspec_status`, and `openspec_instructions` require the `openspec` CLI binary.
+
+For the full tool reference (what each does, when to call it, filesystem effects), see [docs/orchestration.md](docs/orchestration.md).
 
 **Dashboard tab** (`/openspec`):
 
