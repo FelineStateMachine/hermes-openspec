@@ -323,3 +323,117 @@ OPENSPEC_SPEC_DIFF = {
         "required": ["spec"],
     },
 }
+
+OPENSPEC_SPEC_CREATE = {
+    "name": "openspec_spec_create",
+    "description": (
+        "Create a spec from structured input (title, purpose, requirements with "
+        "scenarios) and write a properly formatted spec.md. Filesystem-backed — "
+        "does not require the OpenSpec CLI binary. Pass 'change' to write a "
+        "change-scoped delta spec under openspec/changes/<change>/specs/; omit to "
+        "write a baseline spec under openspec/specs/. Use 'force' to overwrite an "
+        "existing spec. The requirements structure matches what openspec_spec_show "
+        "returns, enabling round-trip edit workflows."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            **PROJECT_PROPS,
+            "spec": {
+                "type": "string",
+                "description": "Spec name (kebab-case, e.g. 'agent-tools'). Used as the directory name.",
+            },
+            "change": {
+                "type": "string",
+                "description": "Change id — when provided, writes under openspec/changes/<change>/specs/<spec>/. Omit for baseline openspec/specs/<spec>/.",
+            },
+            "title": {
+                "type": "string",
+                "description": "Spec title (used in the '# Title' header).",
+            },
+            "purpose": {
+                "type": "string",
+                "description": "Spec purpose statement (used in the '## Purpose' section).",
+            },
+            "requirements": {
+                "type": "array",
+                "description": "Array of requirements. Each: {name, description, scenarios: [{name, steps: [{type, text}]}]}. 'type' is GIVEN/WHEN/THEN/AND/BUT.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "description": {"type": "string"},
+                        "scenarios": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "steps": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "type": {"type": "string", "description": "GIVEN, WHEN, THEN, AND, or BUT"},
+                                                "text": {"type": "string"},
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            "force": {
+                "type": "boolean",
+                "description": "Overwrite an existing spec at the target path. Defaults to false.",
+            },
+        },
+        "required": ["spec", "title", "purpose", "requirements"],
+    },
+}
+
+OPENSPEC_SPEC_SHOW = {
+    "name": "openspec_spec_show",
+    "description": (
+        "Read a spec as structured JSON (title, purpose, requirements with "
+        "scenarios and steps). Filesystem-backed — does not require the OpenSpec "
+        "CLI binary. Pass 'change' to read a change-scoped delta spec; omit to "
+        "read a baseline spec."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            **PROJECT_PROPS,
+            "spec": {
+                "type": "string",
+                "description": "Spec name (e.g. 'agent-tools') or relative path.",
+            },
+            "change": {
+                "type": "string",
+                "description": "Change id — when provided, reads from openspec/changes/<change>/specs/. Omit for baseline openspec/specs/.",
+            },
+        },
+        "required": ["spec"],
+    },
+}
+
+OPENSPEC_SPEC_LIST = {
+    "name": "openspec_spec_list",
+    "description": (
+        "List specs in a project. Filesystem-backed — does not require the "
+        "OpenSpec CLI binary. Pass 'change' to list delta specs within a change; "
+        "omit to list baseline specs."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            **PROJECT_PROPS,
+            "change": {
+                "type": "string",
+                "description": "Change id — when provided, lists specs under openspec/changes/<change>/specs/. Omit for baseline openspec/specs/.",
+            },
+        },
+    },
+}
