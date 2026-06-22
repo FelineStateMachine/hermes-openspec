@@ -1,11 +1,13 @@
-"""OpenSpec CLI-backed Hermes tool handlers."""
+"""OpenSpec Hermes tool handlers."""
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -315,6 +317,709 @@ def openspec_context(args: dict, **kwargs) -> str:
         )
 
     return json.dumps(result)
+
+
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+_VALID_CHANGE_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$")
+_ENRICHMENT_START = "<!-- OPENSPEC_IDEA_ENRICHMENT_START -->"
+_ENRICHMENT_END = "<!-- OPENSPEC_IDEA_ENRICHMENT_END -->"
+_VALID_FEASIBILITY = {"low", "medium", "high"}
+_VALID_TSHIRT = {"xs", "s", "m", "l", "xl"}
+
+
+def _error(message: str, **extra: Any) -> str:
+    payload = {"ok": False, "error": message}
+    payload.update(extra)
+    return json.dumps(payload)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _slugify(value: str, fallback: str = "idea") -> str:
+    slug = _SLUG_RE.sub("-", value.strip().lower()).strip("-")
+    return slug or fallback
+
+
+def _resolve_project(args: dict) -> tuple[Path | None, str | None, dict[str, Any]]:
+    """Resolve a tool call to a project root.
+
+    Prefer explicit workdir. Also accept a registered OpenSpec identifier/source
+    name so agents can call write tools with the same project handles used by
+    ``openspec_context``.
+    """
+    workdir = args.get("workdir")
+    if workdir:
+        root, err = _resolve_workdir(workdir)
+        return root, err, {}
+
+    identifier = str(args.get("identifier") or args.get("project") or "").strip()
+    if identifier:
+        registry = _registry_module()
+        if registry is None:
+            return None, "OpenSpec registry unavailable (plugins.openspec.registry not importable).", {}
+        source_ref, _artifact_ref = registry.parse_identifier(identifier)
+        source = registry.get_source_by_name(source_ref) or registry.get_source(source_ref)
+        if source is None:
+            return None, f"No registered OpenSpec source for '{source_ref}'.", {}
+        root = Path(source["path"]).expanduser()
+        if not root.is_absolute():
+            root = root.resolve()
+        if not root.exists() or not root.is_dir():
+            return None, f"registered source path does not exist or is not a directory: {root}", {}
+        return root, None, {"source": source, "name": registry.effective_name(source)}
+
+    root, err = _resolve_workdir(None)
+    return root, err, {}
+
+
+def _ensure_openspec_layout(root: Path) -> None:
+    openspec_root = root / "openspec"
+    (openspec_root / "changes" / "archive").mkdir(parents=True, exist_ok=True)
+    (openspec_root / "specs").mkdir(parents=True, exist_ok=True)
+    (openspec_root / "ideas").mkdir(parents=True, exist_ok=True)
+
+
+def _unique_idea_path(ideas_root: Path, slug: str) -> tuple[str, Path]:
+    candidate = ideas_root / f"{slug}.md"
+    if not candidate.exists():
+        return slug, candidate
+    index = 2
+    while True:
+        suffixed = f"{slug}-{index}"
+        candidate = ideas_root / f"{suffixed}.md"
+        if not candidate.exists():
+            return suffixed, candidate
+        index += 1
+
+
+def _coerce_string_list(value: Any) -> list[str]:
+    if value is None or value == "":
+        return []
+    if isinstance(value, str):
+        return [line.strip() for line in value.splitlines() if line.strip()]
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [str(value).strip()]
+
+
+def _idea_path(root: Path, idea_ref: str) -> Path:
+    slug = _slugify(idea_ref)
+    return root / "openspec" / "ideas" / f"{slug}.md"
+
+
+def _relative(path: Path, root: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _markdown_list(items: list[str]) -> str:
+    if not items:
+        return "- None"
+    return "\n".join(f"- {item}" for item in items)
+
+
+_TASK_LINE_RE = re.compile(r"^(?P<prefix>\s*- \[)(?P<mark>[ xX])(?P<suffix>\]\s*(?P<id>\d+(?:\.\d+)*)\s+(?P<text>.*?))\s*$")
+
+
+def _change_path(root: Path, change: str, *, archived: bool = False) -> Path:
+    base = root / "openspec" / "changes"
+    if archived:
+        base = base / "archive"
+    return base / change
+
+
+def _resolve_change_path(root: Path, change_ref: str) -> tuple[Path | None, bool]:
+    change = _slugify(change_ref, fallback="")
+    if not change:
+        return None, False
+    active = _change_path(root, change)
+    if active.is_dir():
+        return active, False
+    archived = _change_path(root, change, archived=True)
+    if archived.is_dir():
+        return archived, True
+    return None, False
+
+
+def _derive_status(tasks_path: Path, *, archived: bool = False) -> str:
+    if archived:
+        return "archived"
+    if not tasks_path.is_file():
+        return "draft"
+    tasks = _parse_tasks(tasks_path)
+    if not tasks:
+        return "draft"
+    done = sum(1 for task in tasks if task["status"] == "done")
+    if done == 0:
+        return "todo"
+    if done == len(tasks):
+        return "done"
+    return "in_progress"
+
+
+def _parse_tasks(tasks_path: Path) -> list[dict[str, Any]]:
+    if not tasks_path.is_file():
+        return []
+    tasks: list[dict[str, Any]] = []
+    for line_no, line in enumerate(tasks_path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+        match = _TASK_LINE_RE.match(line)
+        if not match:
+            continue
+        tasks.append({
+            "id": match.group("id"),
+            "text": match.group("text").strip(),
+            "status": "done" if match.group("mark").lower() == "x" else "todo",
+            "line": line_no,
+        })
+    return tasks
+
+
+def _task_counts(tasks: list[dict[str, Any]]) -> dict[str, int]:
+    done = sum(1 for task in tasks if task["status"] == "done")
+    total = len(tasks)
+    return {"total": total, "done": done, "todo": total - done}
+
+
+def _format_tasks(items: list[str]) -> str:
+    lines = ["## 1. Tasks", ""]
+    for index, text in enumerate(items, start=1):
+        lines.append(f"- [ ] 1.{index} {text}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _default_tasks() -> list[str]:
+    return ["Refine scope", "Implement behavior", "Validate OpenSpec artifacts and tests"]
+
+
+def _write_placeholder_spec(change_dir: Path, change: str, title: str, source: str = "change") -> Path:
+    spec_dir = change_dir / "specs" / change
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    spec_path = spec_dir / "spec.md"
+    if spec_path.exists():
+        return spec_path
+    spec = f"""# {title}
+
+## ADDED Requirements
+
+### Requirement: {title} scope
+The system SHALL implement the approved behavior described by this {source} after this placeholder is refined into concrete requirements.
+
+#### Scenario: Placeholder refinement
+- **GIVEN** `{change}` has been created as an OpenSpec change
+- **WHEN** implementation begins
+- **THEN** this placeholder requirement is replaced or refined with concrete, testable behavior before the change is completed
+"""
+    spec_path.write_text(spec, encoding="utf-8")
+    return spec_path
+
+
+def _write_change_scaffold(
+    root: Path,
+    change: str,
+    title: str,
+    summary: str,
+    *,
+    source_section: str = "",
+    tasks: list[str] | None = None,
+    with_spec: bool = False,
+    force: bool = False,
+) -> tuple[dict[str, Any] | None, str | None]:
+    _ensure_openspec_layout(root)
+    change_dir = _change_path(root, change)
+    if change_dir.exists() and not force:
+        return None, f"change already exists: {change}"
+    change_dir.mkdir(parents=True, exist_ok=True)
+    created = _now_iso()
+    source_block = f"\n## Source\n\n{source_section}\n" if source_section else ""
+    proposal = f"""## Why
+
+{summary}
+
+## What Changes
+
+- Create the `{change}` OpenSpec change scaffold for review and refinement.
+
+{source_block}## Capabilities
+
+### New Capabilities
+- `{change}`: Initial capability placeholder. Refine before implementation.
+
+### Modified Capabilities
+- None yet.
+
+## Impact
+
+- TBD: Fill in affected code, APIs, dependencies, or systems before implementation.
+"""
+    (change_dir / "proposal.md").write_text(proposal, encoding="utf-8")
+    task_items = tasks or []
+    if task_items:
+        (change_dir / "tasks.md").write_text(_format_tasks(task_items), encoding="utf-8")
+    spec_path = None
+    if with_spec:
+        spec_path = _write_placeholder_spec(change_dir, change, title)
+    (change_dir / ".openspec.yaml").write_text(
+        "schema: spec-driven\ncreatedAt: " + json.dumps(created) + "\n",
+        encoding="utf-8",
+    )
+    paths = {
+        "proposal": str(change_dir / "proposal.md"),
+        "metadata": str(change_dir / ".openspec.yaml"),
+    }
+    if task_items:
+        paths["tasks"] = str(change_dir / "tasks.md")
+    if spec_path:
+        paths["spec"] = str(spec_path)
+    return {
+        "ok": True,
+        "change": change,
+        "change_path": str(change_dir),
+        "relative_change_path": _relative(change_dir, root),
+        "workdir": str(root),
+        "status": _derive_status(change_dir / "tasks.md"),
+        "paths": paths,
+    }, None
+
+
+def openspec_idea_create(args: dict, **kwargs) -> str:
+    root, err, context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+
+    title = str(args.get("title") or "").strip()
+    prompt = str(args.get("prompt") or "").strip()
+    if not title:
+        return _error("title is required")
+    if not prompt:
+        return _error("prompt is required")
+
+    origin = str(args.get("origin") or args.get("source") or "unspecified").strip() or "unspecified"
+    notes = str(args.get("notes") or "").strip()
+    tags = _coerce_string_list(args.get("tags"))
+
+    _ensure_openspec_layout(root)
+    ideas_root = root / "openspec" / "ideas"
+    slug, path = _unique_idea_path(ideas_root, _slugify(str(args.get("slug") or title)))
+    created = _now_iso()
+    tags_text = ", ".join(tags) if tags else "None"
+
+    sections = [
+        f"# {title}",
+        "",
+        "## Source",
+        f"- Origin: {origin}",
+        f"- Created: {created}",
+        f"- Tags: {tags_text}",
+    ]
+    if context.get("name"):
+        sections.append(f"- Project: {context['name']}")
+    sections.extend([
+        "",
+        "## Prompt",
+        prompt,
+    ])
+    if notes:
+        sections.extend(["", "## Notes", notes])
+    sections.append("")
+
+    path.write_text("\n".join(sections), encoding="utf-8")
+    return json.dumps({
+        "ok": True,
+        "slug": slug,
+        "title": title,
+        "path": str(path),
+        "relative_path": _relative(path, root),
+        "workdir": str(root),
+        "metadata": {"origin": origin, "created": created, "tags": tags},
+    })
+
+
+def openspec_idea_enrich(args: dict, **kwargs) -> str:
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+    idea = str(args.get("idea") or args.get("slug") or "").strip()
+    if not idea:
+        return _error("idea is required")
+
+    path = _idea_path(root, idea)
+    if not path.is_file():
+        return _error(f"idea not found: {idea}")
+
+    feasibility = str(args.get("feasibility") or "").strip()
+    tshirt_size = str(args.get("tshirt_size") or args.get("t_shirt_size") or "").strip()
+    if feasibility and feasibility.lower() not in _VALID_FEASIBILITY:
+        return _error("feasibility must be one of: Low, Medium, High")
+    if tshirt_size and tshirt_size.lower() not in _VALID_TSHIRT:
+        return _error("tshirt_size must be one of: XS, S, M, L, XL")
+
+    problem = str(args.get("problem") or "TBD").strip() or "TBD"
+    proposed_direction = str(args.get("proposed_direction") or args.get("proposedDirection") or "TBD").strip() or "TBD"
+    key_questions = _coerce_string_list(args.get("key_questions"))
+    risks = _coerce_string_list(args.get("risks"))
+    size_justification = str(args.get("size_justification") or "TBD").strip() or "TBD"
+    suggested_next_step = str(args.get("suggested_next_step") or "TBD").strip() or "TBD"
+    generated = _now_iso()
+
+    report = "\n".join([
+        _ENRICHMENT_START,
+        "## Enrichment Report",
+        "",
+        f"Generated: {generated}",
+        "",
+        "### Problem",
+        problem,
+        "",
+        "### Proposed Direction",
+        proposed_direction,
+        "",
+        "### Key Questions",
+        _markdown_list(key_questions),
+        "",
+        "### Feasibility",
+        f"Feasibility: {feasibility or 'TBD'}",
+        "",
+        "### T-Shirt Size",
+        f"T-Shirt Size: {tshirt_size or 'TBD'}",
+        "",
+        "### Size Justification",
+        size_justification,
+        "",
+        "### Risks",
+        _markdown_list(risks),
+        "",
+        "### Suggested Next Step",
+        suggested_next_step,
+        _ENRICHMENT_END,
+        "",
+    ])
+
+    content = path.read_text(encoding="utf-8", errors="replace")
+    if _ENRICHMENT_START in content and _ENRICHMENT_END in content:
+        before, rest = content.split(_ENRICHMENT_START, 1)
+        _old, after = rest.split(_ENRICHMENT_END, 1)
+        content = before.rstrip() + "\n\n" + report + after.lstrip("\n")
+    else:
+        content = content.rstrip() + "\n\n" + report
+    path.write_text(content, encoding="utf-8")
+
+    return json.dumps({
+        "ok": True,
+        "idea": _slugify(idea),
+        "path": str(path),
+        "relative_path": _relative(path, root),
+        "workdir": str(root),
+        "metadata": {"generated": generated, "feasibility": feasibility, "tshirt_size": tshirt_size},
+    })
+
+
+def openspec_idea_promote(args: dict, **kwargs) -> str:
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+    idea = str(args.get("idea") or args.get("slug") or "").strip()
+    change = _slugify(str(args.get("change") or args.get("change_id") or ""), fallback="")
+    if not idea:
+        return _error("idea is required")
+    if not change or not _VALID_CHANGE_RE.match(change):
+        return _error("change must be a kebab-case id")
+
+    idea_path = _idea_path(root, idea)
+    if not idea_path.is_file():
+        return _error(f"idea not found: {idea}")
+
+    _ensure_openspec_layout(root)
+    change_dir = root / "openspec" / "changes" / change
+    if change_dir.exists() and not args.get("force"):
+        return _error(f"change already exists: {change}", change=change, change_path=str(change_dir))
+    change_dir.mkdir(parents=True, exist_ok=True)
+
+    idea_content = idea_path.read_text(encoding="utf-8", errors="replace")
+    title = idea_content.splitlines()[0].lstrip("# ").strip() if idea_content.strip() else idea
+    summary = str(args.get("summary") or f"Promote idea: {title}").strip()
+    rel_idea = _relative(idea_path, root)
+    created = _now_iso()
+
+    proposal = f"""## Why
+
+{summary}
+
+## What Changes
+
+- Promote the reviewed idea `{idea_path.stem}` into an implementation-ready OpenSpec change.
+- Preserve traceability to the source idea while proposal, specs, design, and tasks are refined.
+
+## Source Idea
+
+- Path: `{rel_idea}`
+- Promoted: {created}
+
+### Idea Content
+
+```md
+{idea_content.rstrip()}
+```
+
+## Capabilities
+
+### New Capabilities
+- `{change}`: Initial capability placeholder created from the promoted idea. Refine before implementation.
+
+### Modified Capabilities
+- None yet.
+
+## Impact
+
+- TBD: Fill in affected code, APIs, dependencies, or systems before implementation.
+"""
+    tasks = """## 1. Proposal Refinement
+
+- [ ] 1.1 Review the source idea and clarify scope.
+- [ ] 1.2 Identify affected capabilities and write spec deltas.
+- [ ] 1.3 Add design notes if implementation trade-offs are non-trivial.
+
+## 2. Implementation
+
+- [ ] 2.1 Implement the approved behavior.
+- [ ] 2.2 Add or update tests.
+- [ ] 2.3 Validate OpenSpec artifacts and test suite.
+"""
+    spec_dir = change_dir / "specs" / change
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    spec = f"""# {title}
+
+## ADDED Requirements
+
+### Requirement: Promoted idea scope
+The system SHALL implement the approved behavior described by the promoted idea after this placeholder is refined into concrete requirements.
+
+#### Scenario: Placeholder refinement
+- **GIVEN** the idea `{idea_path.stem}` has been promoted into this change
+- **WHEN** implementation begins
+- **THEN** this placeholder requirement is replaced or refined with concrete, testable behavior before the change is completed
+"""
+    (change_dir / "proposal.md").write_text(proposal, encoding="utf-8")
+    (change_dir / "tasks.md").write_text(tasks, encoding="utf-8")
+    (spec_dir / "spec.md").write_text(spec, encoding="utf-8")
+    metadata = {
+        "schema": "spec-driven",
+        "sourceIdea": rel_idea,
+        "promotedAt": created,
+    }
+    (change_dir / ".openspec.yaml").write_text("schema: spec-driven\nsourceIdea: " + json.dumps(rel_idea) + "\npromotedAt: " + json.dumps(created) + "\n", encoding="utf-8")
+
+    return json.dumps({
+        "ok": True,
+        "idea": idea_path.stem,
+        "change": change,
+        "change_path": str(change_dir),
+        "relative_change_path": _relative(change_dir, root),
+        "workdir": str(root),
+        "paths": {
+            "proposal": str(change_dir / "proposal.md"),
+            "tasks": str(change_dir / "tasks.md"),
+            "spec": str(spec_dir / "spec.md"),
+            "metadata": str(change_dir / ".openspec.yaml"),
+        },
+        "metadata": metadata,
+    })
+
+
+def openspec_change_create(args: dict, **kwargs) -> str:
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+    change = _slugify(str(args.get("change") or args.get("change_id") or ""), fallback="")
+    title = str(args.get("title") or change.replace("-", " ").title()).strip()
+    summary = str(args.get("summary") or f"Create change: {title}").strip()
+    if not change or not _VALID_CHANGE_RE.match(change):
+        return _error("change must be a kebab-case id")
+    tasks = _coerce_string_list(args.get("tasks"))
+    result, error = _write_change_scaffold(
+        root,
+        change,
+        title,
+        summary,
+        tasks=tasks,
+        with_spec=bool(args.get("with_spec")) or bool(tasks),
+        force=bool(args.get("force")),
+    )
+    if error:
+        return _error(error, change=change, change_path=str(_change_path(root, change)))
+    return json.dumps(result)
+
+
+def openspec_change_promote(args: dict, **kwargs) -> str:
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+    change = _slugify(str(args.get("change") or args.get("change_id") or ""), fallback="")
+    if not change:
+        return _error("change is required")
+    change_dir, archived = _resolve_change_path(root, change)
+    if change_dir is None or archived:
+        return _error(f"active change not found: {change}")
+    tasks_path = change_dir / "tasks.md"
+    if not tasks_path.exists() or bool(args.get("replace_tasks")):
+        task_items = _coerce_string_list(args.get("tasks")) or _default_tasks()
+        tasks_path.write_text(_format_tasks(task_items), encoding="utf-8")
+    title = change.replace("-", " ").title()
+    proposal = _read_doc(change_dir / "proposal.md")
+    for line in proposal.splitlines():
+        if line.startswith("# "):
+            title = line.lstrip("# ").strip() or title
+            break
+    spec_path = _write_placeholder_spec(change_dir, change, title)
+    tasks = _parse_tasks(tasks_path)
+    return json.dumps({
+        "ok": True,
+        "change": change,
+        "change_path": str(change_dir),
+        "relative_change_path": _relative(change_dir, root),
+        "workdir": str(root),
+        "status": _derive_status(tasks_path),
+        "counts": _task_counts(tasks),
+        "paths": {"tasks": str(tasks_path), "spec": str(spec_path)},
+    })
+
+
+def openspec_task_list(args: dict, **kwargs) -> str:
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+    change = _slugify(str(args.get("change") or args.get("change_id") or ""), fallback="")
+    if not change:
+        return _error("change is required")
+    change_dir, archived = _resolve_change_path(root, change)
+    if change_dir is None:
+        return _error(f"change not found: {change}")
+    tasks_path = change_dir / "tasks.md"
+    tasks = _parse_tasks(tasks_path)
+    if not tasks:
+        return _error(f"tasks not found for change: {change}", change=change, tasks=[])
+    return json.dumps({
+        "ok": True,
+        "change": change,
+        "archived": archived,
+        "path": str(tasks_path),
+        "relative_path": _relative(tasks_path, root),
+        "tasks": tasks,
+        "counts": _task_counts(tasks),
+        "status": _derive_status(tasks_path, archived=archived),
+    })
+
+
+def openspec_task_set_status(args: dict, **kwargs) -> str:
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+    change = _slugify(str(args.get("change") or args.get("change_id") or ""), fallback="")
+    status = str(args.get("status") or "").strip().lower()
+    if status in {"open", "todo", "pending"}:
+        mark = " "
+        normalized = "todo"
+    elif status in {"done", "complete", "completed"}:
+        mark = "x"
+        normalized = "done"
+    else:
+        return _error("status must be 'todo' or 'done'")
+    task_ids = set(_coerce_string_list(args.get("tasks") or args.get("task_ids")))
+    if not task_ids:
+        return _error("tasks is required")
+    change_dir, archived = _resolve_change_path(root, change)
+    if change_dir is None or archived:
+        return _error(f"active change not found: {change}")
+    tasks_path = change_dir / "tasks.md"
+    if not tasks_path.is_file():
+        return _error(f"tasks not found for change: {change}")
+    lines = tasks_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    found: set[str] = set()
+    updated_lines = []
+    for line in lines:
+        match = _TASK_LINE_RE.match(line)
+        if match and match.group("id") in task_ids:
+            found.add(match.group("id"))
+            line = f"{match.group('prefix')}{mark}{match.group('suffix')}"
+        updated_lines.append(line)
+    missing = sorted(task_ids - found)
+    if missing:
+        return _error("task ids not found: " + ", ".join(missing), missing=missing)
+    tasks_path.write_text("\n".join(updated_lines) + "\n", encoding="utf-8")
+    tasks = _parse_tasks(tasks_path)
+    return json.dumps({
+        "ok": True,
+        "change": change,
+        "updated": sorted(found),
+        "set_status": normalized,
+        "path": str(tasks_path),
+        "relative_path": _relative(tasks_path, root),
+        "tasks": tasks,
+        "counts": _task_counts(tasks),
+        "status": _derive_status(tasks_path),
+    })
+
+
+def openspec_change_archive(args: dict, **kwargs) -> str:
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+    change = _slugify(str(args.get("change") or args.get("change_id") or ""), fallback="")
+    if not change:
+        return _error("change is required")
+    change_dir = _change_path(root, change)
+    if not change_dir.is_dir():
+        return _error(f"active change not found: {change}")
+    tasks_path = change_dir / "tasks.md"
+    status = _derive_status(tasks_path)
+    if status != "done" and not args.get("force"):
+        return _error(f"change is not complete: {change}", status=status)
+    archive_dir = _change_path(root, change, archived=True)
+    archive_dir.parent.mkdir(parents=True, exist_ok=True)
+    if archive_dir.exists() and not args.get("force"):
+        return _error(f"archived change already exists: {change}")
+    if archive_dir.exists():
+        shutil.rmtree(archive_dir)
+    shutil.move(str(change_dir), str(archive_dir))
+    return json.dumps({
+        "ok": True,
+        "change": change,
+        "status": "archived",
+        "archived_path": str(archive_dir),
+        "relative_archived_path": _relative(archive_dir, root),
+        "workdir": str(root),
+    })
+
+
+def openspec_change_unarchive(args: dict, **kwargs) -> str:
+    root, err, _context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+    change = _slugify(str(args.get("change") or args.get("change_id") or ""), fallback="")
+    if not change:
+        return _error("change is required")
+    archive_dir = _change_path(root, change, archived=True)
+    active_dir = _change_path(root, change)
+    if not archive_dir.is_dir():
+        return _error(f"archived change not found: {change}")
+    if active_dir.exists() and not args.get("force"):
+        return _error(f"active change already exists: {change}")
+    if active_dir.exists():
+        shutil.rmtree(active_dir)
+    shutil.move(str(archive_dir), str(active_dir))
+    status = _derive_status(active_dir / "tasks.md")
+    return json.dumps({
+        "ok": True,
+        "change": change,
+        "status": status,
+        "change_path": str(active_dir),
+        "relative_change_path": _relative(active_dir, root),
+        "workdir": str(root),
+    })
 
 
 def openspec_list(args: dict, **kwargs) -> str:

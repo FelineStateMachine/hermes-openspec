@@ -17,6 +17,18 @@ _TOOLS = (
     ("openspec_instructions", schemas.OPENSPEC_INSTRUCTIONS, tools.openspec_instructions, "🧭"),
 )
 
+_WRITE_TOOLS = (
+    ("openspec_idea_create", schemas.OPENSPEC_IDEA_CREATE, tools.openspec_idea_create, "💡"),
+    ("openspec_idea_enrich", schemas.OPENSPEC_IDEA_ENRICH, tools.openspec_idea_enrich, "🔎"),
+    ("openspec_idea_promote", schemas.OPENSPEC_IDEA_PROMOTE, tools.openspec_idea_promote, "🚀"),
+    ("openspec_task_list", schemas.OPENSPEC_TASK_LIST, tools.openspec_task_list, "☑️"),
+    ("openspec_task_set_status", schemas.OPENSPEC_TASK_SET_STATUS, tools.openspec_task_set_status, "✅"),
+    ("openspec_change_create", schemas.OPENSPEC_CHANGE_CREATE, tools.openspec_change_create, "📝"),
+    ("openspec_change_promote", schemas.OPENSPEC_CHANGE_PROMOTE, tools.openspec_change_promote, "➡️"),
+    ("openspec_change_archive", schemas.OPENSPEC_CHANGE_ARCHIVE, tools.openspec_change_archive, "📦"),
+    ("openspec_change_unarchive", schemas.OPENSPEC_CHANGE_UNARCHIVE, tools.openspec_change_unarchive, "♻️"),
+)
+
 
 def _check_openspec_available() -> bool:
     return tools._openspec_bin() is not None
@@ -40,5 +52,13 @@ def register(ctx) -> None:
             schema=schema,
             handler=handler,
             check_fn=_check_openspec_available,
+            emoji=emoji,
+        )
+    for name, schema, handler, emoji in _WRITE_TOOLS:
+        ctx.register_tool(
+            name=name,
+            toolset="openspec",
+            schema=schema,
+            handler=handler,
             emoji=emoji,
         )
