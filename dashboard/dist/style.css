@@ -81,6 +81,20 @@
 .os-tab-btn-active { color: var(--color-foreground, #eee); border-bottom-color: var(--color-primary, var(--midground, #eee)); }
 .os-tab-panel { padding-top: 0.25rem; }
 
+/* Tasks */
+.os-tasks { display: flex; flex-direction: column; gap: 0.75rem; }
+.os-tasks-progress { display: flex; align-items: center; gap: 0.5rem; }
+.os-tasks-bar { flex: 1; height: 0.375rem; border-radius: 0.1875rem; background: var(--color-secondary, rgba(255,255,255,0.06)); overflow: hidden; }
+.os-tasks-bar-fill { height: 100%; border-radius: 0.1875rem; background: var(--color-primary, #60a5fa); transition: width 0.2s; }
+.os-tasks-count { font-size: 0.7rem; color: var(--color-muted-foreground, #888); white-space: nowrap; }
+.os-tasks-section { display: flex; flex-direction: column; gap: 0.125rem; }
+.os-tasks-section-title { font-size: 0.82rem; font-weight: 600; color: var(--color-foreground, #eee); margin: 0; }
+.os-task-item { display: flex; align-items: flex-start; gap: 0.375rem; padding: 0.1875rem 0; font-size: 0.78rem; line-height: 1.4; }
+.os-task-check { flex-shrink: 0; width: 1rem; text-align: center; font-size: 0.72rem; color: var(--color-muted-foreground, #888); }
+.os-task-text { flex: 1; }
+.os-task-done .os-task-check { color: var(--color-primary, #60a5fa); }
+.os-task-done .os-task-text { color: var(--color-muted-foreground, #888); text-decoration: line-through; }
+
 /* Markdown */
 .os-md { font-size: 0.85rem; line-height: 1.6; color: var(--color-foreground, #eee); }
 .os-md h1, .os-md h2, .os-md h3, .os-md h4 { margin: 0.75rem 0 0.375rem; font-weight: 600; color: var(--color-foreground, #eee); }

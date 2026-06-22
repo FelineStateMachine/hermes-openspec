@@ -293,6 +293,34 @@
             detail ? h(ChangeDetailTabs, { detail: detail }) : null
     );
   }
+  // ── Task parser ─────────────────────────────────────────────────────
+  function parseTasks(md) {
+    if (!md) return { sections: [], total: 0, done: 0 };
+    var lines = md.split("\n");
+    var sections = [];
+    var current = null;
+    var total = 0, done = 0;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var h = line.match(/^##\s+(.+)$/);
+      if (h) {
+        current = { title: h[1].trim(), tasks: [] };
+        sections.push(current);
+        continue;
+      }
+      var t = line.match(/^[-*]\s+\[(.)\]\s+(.+)$/);
+      if (t) {
+        var checked = t[1] === "x" || t[1] === "X";
+        var text = t[2].trim();
+        if (checked) done++;
+        total++;
+        if (current) current.tasks.push({ checked: checked, text: text });
+        else { current = { title: "", tasks: [] }; sections.push(current); current.tasks.push({ checked: checked, text: text }); }
+      }
+    }
+    return { sections: sections, total: total, done: done };
+  }
+
   function ChangeDetailTabs(_ref9) {
     var detail = _ref9.detail;
     var tabs = [];
@@ -305,7 +333,9 @@
     var activeTab = _tab[0], setActiveTab = _tab[1];
     var content = activeTab === "specs"
       ? detail.specs.map(function (s) { return h("div", { key: s.path, className: "os-spec-block" }, h("h4", null, s.path), h(Markdown, { md: s.content })); })
-      : h(Markdown, { md: detail[activeTab] });
+      : activeTab === "tasks"
+        ? h(TasksView, { md: detail[activeTab], stats: detail.taskStats })
+        : h(Markdown, { md: detail[activeTab] });
     return h("div", { className: "os-tabs" },
       h("div", { className: "os-tabs-bar" }, tabs.map(function (t) {
         return h("button", {
@@ -314,6 +344,34 @@
         }, t[1]);
       })),
       h("div", { className: "os-tab-panel" }, content)
+    );
+  }
+
+  // ── Tasks view (structured checklist) ───────────────────────────────
+  function TasksView(_ref) {
+    var md = _ref.md, stats = _ref.stats;
+    var parsed = useMemo(function () { return parseTasks(md); }, [md]);
+    var total = stats ? stats.total : parsed.total;
+    var done = stats ? stats.done : parsed.done;
+    var pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    return h("div", { className: "os-tasks" },
+      total > 0 ? h("div", { className: "os-tasks-progress" },
+        h("div", { className: "os-tasks-bar" },
+          h("div", { className: "os-tasks-bar-fill", style: { width: pct + "%" } })
+        ),
+        h("span", { className: "os-tasks-count" }, done + " / " + total + " done (" + pct + "%)")
+      ) : null,
+      parsed.sections.map(function (sec, si) {
+        return h("div", { key: si, className: "os-tasks-section" },
+          sec.title ? h("h4", { className: "os-tasks-section-title" }, sec.title) : null,
+          sec.tasks.map(function (t, ti) {
+            return h("div", { key: ti, className: cn("os-task-item", t.checked && "os-task-done") },
+              h("span", { className: "os-task-check" }, t.checked ? "\u2713" : "\u25CB"),
+              h("span", { className: "os-task-text" }, t.text)
+            );
+          })
+        );
+      })
     );
   }
 
