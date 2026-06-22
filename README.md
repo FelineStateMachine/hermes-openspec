@@ -33,6 +33,10 @@ This plugin closes both gaps:
 - **Specs view** — browse current specs in the worktree, sorted alphabetically or by last git commit date. Compare against HEAD (dirty mode) or arbitrary git refs (before/after).
 - Deep-linking via URL hash (`#project-name/token`).
 
+![Change board](http://clip.sandboxd.internal/files/013422f52f55fa99bb41f2aa6e9d1afc)
+
+![Spec browser](http://clip.sandboxd.internal/files/4c17f0ecfbd3552a93bfa5e34ce1d98f)
+
 ## Requirements
 
 - **Hermes Agent** — any recent build that supports the plugin system (`hermes plugins install`).
