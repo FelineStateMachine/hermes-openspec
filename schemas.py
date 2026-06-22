@@ -296,3 +296,30 @@ OPENSPEC_CHANGE_UNARCHIVE = {
     "description": "Move an archived OpenSpec change back to the active changes directory.",
     "parameters": {"type": "object", "properties": {**PROJECT_PROPS, "change": {"type": "string"}, "change_id": {"type": "string"}, "force": {"type": "boolean"}}, "required": ["change"]},
 }
+
+OPENSPEC_SPEC_DIFF = {
+    "name": "openspec_spec_diff",
+    "description": (
+        "Compare a change's delta spec against its baseline, or a worktree spec "
+        "against its HEAD version, and return a structured semantic delta at the "
+        "requirement and scenario level plus a unified line diff fallback. "
+        "Filesystem-backed — does not require the OpenSpec CLI binary. "
+        "Pass 'change' to diff a change's delta spec against the baseline spec; "
+        "omit 'change' to diff the current worktree spec against its HEAD version."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            **PROJECT_PROPS,
+            "spec": {
+                "type": "string",
+                "description": "Spec name (e.g. 'agent-tools') or relative path under openspec/specs/.",
+            },
+            "change": {
+                "type": "string",
+                "description": "Change id — when provided, diff the change's delta spec against the baseline. Omit for worktree-vs-HEAD comparison.",
+            },
+        },
+        "required": ["spec"],
+    },
+}

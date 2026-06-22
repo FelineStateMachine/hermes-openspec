@@ -27,6 +27,7 @@ that performs it.
 | Validate before archiving | All artifacts | `openspec_validate` | Returns validation errors |
 | Archive a completed change | `openspec/changes/archive/` | `openspec_change_archive` | Moves the change dir to archive |
 | Reopen an archived change | `openspec/changes/` (restore) | `openspec_change_unarchive` | Moves the change dir back to active |
+| Compare a change spec against its baseline | Spec files (read-only) | `openspec_spec_diff` | Returns a structured semantic delta at the requirement/scenario level plus a unified line diff fallback. Filesystem-backed. |
 
 ---
 
@@ -47,6 +48,7 @@ the reference.
 | `openspec_task_set_status` | Toggles checkboxes in `openspec/changes/<change>/tasks.md` | Todo → In progress → Done |
 | `openspec_change_archive` | Moves `openspec/changes/<change>/` → `openspec/changes/archive/<change>/` | Done → Archived |
 | `openspec_change_unarchive` | Moves archive dir back to active changes | Archived → Done |
+| `openspec_spec_diff` | Returns structured semantic delta (requirement/scenario level) between change spec and baseline, or worktree spec and HEAD. Read-only. | (no transition — read tool) |
 
 ### Read tools
 

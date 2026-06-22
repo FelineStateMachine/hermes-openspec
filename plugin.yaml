@@ -17,3 +17,4 @@ provides_tools:
   - openspec_change_promote
   - openspec_change_archive
   - openspec_change_unarchive
+  - openspec_spec_diff
