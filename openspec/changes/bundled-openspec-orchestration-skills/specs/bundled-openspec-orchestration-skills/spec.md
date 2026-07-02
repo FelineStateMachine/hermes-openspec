@@ -1,85 +1,62 @@
-# Bundled OpenSpec Workflow Skills + CLI Passthrough Specification
+# Bundled OpenSpec Workflow Skills and CLI Passthrough Delta
 
-## Purpose
+## ADDED Requirements
 
-Bundle upstream OpenSpec workflow skills as Hermes plugin skills and add an `openspec_cli` passthrough tool, creating a clean layer separation between workflow prompts (skills), CLI access, ad-hoc query tools, and the dashboard.
-
-## Requirements
-
-### Requirement: Bundle 11 upstream workflow skills
-
-The plugin must bundle all 11 upstream OpenSpec workflow skills as Hermes plugin skills, registered via `ctx.register_skill()`.
+### Requirement: Bundle upstream workflow skills
+The plugin SHALL bundle all upstream OpenSpec workflow skills as Hermes plugin skills and register them during plugin load.
 
 #### Scenario: Skills registered on plugin load
-
 - **GIVEN** the plugin is installed and enabled
 - **WHEN** Hermes starts and calls `register(ctx)`
-- **THEN** all 11 skills (`openspec-propose`, `openspec-explore`, `openspec-apply-change`, `openspec-archive-change`, `openspec-new-change`, `openspec-continue-change`, `openspec-ff-change`, `openspec-verify-change`, `openspec-sync-specs`, `openspec-bulk-archive-change`, `openspec-onboard`) are registered and appear in `hermes skills list`
+- **THEN** all bundled workflow skills are registered and appear in the Hermes skill catalog
 
-#### Scenario: Skill content matches upstream
-
+#### Scenario: Skill content matches upstream format
 - **GIVEN** the bundled skill files exist in `skills/<name>/SKILL.md`
-- **WHEN** the skill content is compared to the upstream `generateSkillContent()` output
-- **THEN** the YAML frontmatter and instructions body match the upstream format without modification
-
-#### Scenario: Agent auto-loads skill on intent match
-
-- **GIVEN** the `openspec-propose` skill is registered
-- **WHEN** the user says "propose a change for dark mode"
-- **THEN** the agent loads the `openspec-propose` skill and follows its workflow
+- **WHEN** a contributor inspects a bundled skill
+- **THEN** the skill uses upstream OpenSpec-style YAML frontmatter and workflow instructions without being rewritten around plugin-specific tool shapes
 
 #### Scenario: Skills call CLI directly via terminal
+- **GIVEN** an upstream workflow skill is loaded in a session
+- **WHEN** the skill instructs the agent to run an OpenSpec workflow command
+- **THEN** the agent may execute the OpenSpec CLI directly rather than routing the workflow through plugin wrapper tools
 
-- **GIVEN** an upstream skill is loaded in a session
-- **WHEN** the skill instructs the agent to run `openspec new change "<name>"`
-- **THEN** the agent executes the command via the `terminal` tool, not via plugin wrapper tools
-
-### Requirement: openspec_cli passthrough tool
-
-The plugin must provide an `openspec_cli` tool that runs the `openspec` CLI binary and returns raw output.
+### Requirement: OpenSpec CLI passthrough tool
+The plugin SHALL provide an `openspec_cli` passthrough tool that runs the OpenSpec CLI binary and returns raw command output.
 
 #### Scenario: Tool appears when CLI is installed
-
 - **GIVEN** the `openspec` binary is available on PATH or via `OPENSPEC_BIN`
 - **WHEN** the plugin registers tools
-- **THEN** `openspec_cli` appears in the agent's tool list
+- **THEN** `openspec_cli` is available in the agent tool list
 
 #### Scenario: Tool hidden when CLI is not installed
-
 - **GIVEN** the `openspec` binary is not available
 - **WHEN** the plugin registers tools
-- **THEN** `openspec_cli` does not appear in the agent's tool list
+- **THEN** `openspec_cli` is not exposed
 
 #### Scenario: JSON output mode
-
 - **GIVEN** the `openspec` CLI is installed
-- **WHEN** the agent calls `openspec_cli` with `command: "status --change my-change"` and `json_output: true`
-- **THEN** the tool runs `openspec status --change my-change --json` and returns the raw JSON output from the CLI
+- **WHEN** the agent calls `openspec_cli` with a command and `json_output: true`
+- **THEN** the tool runs the command with JSON output enabled and returns the raw CLI JSON payload
 
 #### Scenario: Raw output mode
-
 - **GIVEN** the `openspec` CLI is installed
-- **WHEN** the agent calls `openspec_cli` with `command: "list"` and `json_output: false`
-- **THEN** the tool runs `openspec list` (without `--json`) and returns the raw text output
+- **WHEN** the agent calls `openspec_cli` with `json_output: false`
+- **THEN** the tool runs the command without forcing JSON output and returns the raw text payload
 
 #### Scenario: Workdir support
-
 - **GIVEN** a project at a specific path
-- **WHEN** the agent calls `openspec_cli` with `workdir: "/path/to/project"`
-- **THEN** the CLI command runs with that path as the working directory
+- **WHEN** the agent calls `openspec_cli` with that workdir
+- **THEN** the CLI command runs in that directory
 
 ### Requirement: Layer separation documentation
-
-The plugin must include documentation explaining the boundary between skills, CLI, plugin tools, and dashboard.
+The plugin SHALL include documentation explaining the boundary between bundled workflow skills, CLI access, plugin tools, and the dashboard.
 
 #### Scenario: Layer doc exists
-
-- **GIVEN** the plugin is installed
+- **GIVEN** the plugin repository is checked out
 - **WHEN** a contributor reads `docs/layers.md`
-- **THEN** the doc explains that skills call the CLI directly via terminal, plugin tools return different JSON shapes, and the two coexist by design
+- **THEN** the document explains that workflow skills call the OpenSpec CLI directly, plugin tools return plugin-specific JSON shapes, and both interfaces coexist by design
 
 #### Scenario: README references layer doc
-
 - **GIVEN** the plugin README is read
 - **WHEN** the reader looks for architecture information
-- **THEN** the README links to `docs/layers.md` and mentions the layer architecture
+- **THEN** the README links to `docs/layers.md` and summarizes the layer architecture
