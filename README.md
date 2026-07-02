@@ -42,6 +42,15 @@ For the full tool reference, lifecycle states, and delegation patterns, see [doc
 
 ![Spec browser](screenshots/specs.png)
 
+## Companion X/Twitter Specs
+
+For social monitoring changes, pair this OpenSpec workflow with
+[Hermes Tweet](https://github.com/Xquik-dev/hermes-tweet). Hermes Tweet can
+collect X/Twitter account, post, or trend context inside Hermes, while
+hermes-openspec keeps the related proposals, tasks, acceptance criteria, and
+spec diffs reviewable from the dashboard. Hermes Tweet is a third-party project
+maintained by Xquik-dev, not by this repository.
+
 ## Requirements
 
 - **Hermes Agent** — any recent build that supports the plugin system (`hermes plugins install`).
