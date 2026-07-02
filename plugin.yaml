@@ -12,6 +12,7 @@ provides_tools:
   - openspec_idea_enrich
   - openspec_idea_promote
   - openspec_task_list
+  - openspec_change_sequence_set
   - openspec_task_set_status
   - openspec_change_create
   - openspec_change_promote
@@ -21,3 +22,4 @@ provides_tools:
   - openspec_spec_create
   - openspec_spec_show
   - openspec_spec_list
+  - openspec_cli

@@ -9,14 +9,16 @@ maps the change token to the matching change folder.
 The DB lives at ``<hermes_home>/openspec.db`` and is shared between the dashboard
 plugin (which owns source CRUD via its ``plugin_api.py`` routes) and the agent
 plugin (which only reads to resolve sources). Schema is intentionally tiny —
-one row per source. Individual changes are NOT stored; they are addressed live
-by deterministic tokens derived from their folder names, so the registry never
-drifts from the files on disk.
+one row per source. Change contents are not stored; changes are addressed live
+by deterministic tokens derived from their folder names. The only per-change
+metadata kept here is dashboard-local sequence order, assigned when the
+dashboard first observes a change so OpenSpec files remain untouched.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import secrets
 import sqlite3
 import time
@@ -55,7 +57,49 @@ def _connect() -> sqlite3.Connection:
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_openspec_sources_path ON openspec_sources(path)"
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS change_sequence (
+            source_id     TEXT NOT NULL,
+            change_name   TEXT NOT NULL,
+            group_id      TEXT NOT NULL DEFAULT 'default',
+            position      INTEGER NOT NULL,
+            depends_on    TEXT NOT NULL DEFAULT '[]',
+            first_seen_at REAL NOT NULL,
+            updated_at    REAL NOT NULL,
+            PRIMARY KEY (source_id, change_name)
+        )
+        """
+    )
+    _ensure_change_sequence_columns(conn)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_change_sequence_source_position ON change_sequence(source_id, position)"
+    )
     return conn
+
+
+def _ensure_change_sequence_columns(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(change_sequence)").fetchall()}
+    if "group_id" not in cols:
+        conn.execute("ALTER TABLE change_sequence ADD COLUMN group_id TEXT NOT NULL DEFAULT 'default'")
+    if "depends_on" not in cols:
+        conn.execute("ALTER TABLE change_sequence ADD COLUMN depends_on TEXT NOT NULL DEFAULT '[]'")
+
+
+def _sequence_row(row: sqlite3.Row) -> dict[str, Any]:
+    try:
+        depends_on = json.loads(row["depends_on"] or "[]")
+    except Exception:
+        depends_on = []
+    if not isinstance(depends_on, list):
+        depends_on = []
+    return {
+        "groupId": row["group_id"] or "default",
+        "position": int(row["position"]),
+        "dependsOn": [str(item) for item in depends_on],
+        "firstSeenAt": row["first_seen_at"],
+        "updatedAt": row["updated_at"],
+    }
 
 
 def _gen_token(conn: sqlite3.Connection) -> str:
@@ -195,8 +239,120 @@ def remove_source(token: str) -> bool:
         return False
     with _connect() as conn:
         cur = conn.execute("DELETE FROM openspec_sources WHERE token = ?", (token,))
+        conn.execute("DELETE FROM change_sequence WHERE source_id = ?", (token,))
         conn.commit()
         return cur.rowcount > 0
+
+
+def ensure_change_sequence(source_id: str, change_names: list[str]) -> dict[str, dict[str, Any]]:
+    """Ensure dashboard-local sequence rows exist for observed changes.
+
+    Existing positions are preserved. Newly observed change folders append after
+    the current max position in the order provided by the scanner. This keeps
+    sequencing out of OpenSpec files and avoids parsing naming conventions.
+    """
+    source_id = (source_id or "").strip()
+    names: list[str] = []
+    seen: set[str] = set()
+    for raw in change_names or []:
+        name = str(raw or "").strip()
+        if name and name not in seen:
+            names.append(name)
+            seen.add(name)
+    if not source_id or not names:
+        return {}
+
+    now = time.time()
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT change_name, group_id, position, depends_on, first_seen_at, updated_at FROM change_sequence WHERE source_id = ?",
+            (source_id,),
+        ).fetchall()
+        existing = {r["change_name"]: r for r in rows}
+        max_pos = max((int(r["position"]) for r in rows), default=0)
+        for name in names:
+            if name in existing:
+                continue
+            max_pos += 1
+            conn.execute(
+                "INSERT INTO change_sequence (source_id, change_name, position, first_seen_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                (source_id, name, max_pos, now, now),
+            )
+        conn.commit()
+        rows = conn.execute(
+            "SELECT change_name, group_id, position, depends_on, first_seen_at, updated_at FROM change_sequence WHERE source_id = ?",
+            (source_id,),
+        ).fetchall()
+
+    wanted = set(names)
+    return {
+        r["change_name"]: _sequence_row(r)
+        for r in rows
+        if r["change_name"] in wanted
+    }
+
+
+def get_change_sequence(source_id: str, change_names: list[str] | None = None) -> dict[str, dict[str, Any]]:
+    """Return dashboard-local sequence metadata for a source."""
+    source_id = (source_id or "").strip()
+    if not source_id:
+        return {}
+    names = {str(name or "").strip() for name in (change_names or []) if str(name or "").strip()}
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT change_name, group_id, position, depends_on, first_seen_at, updated_at FROM change_sequence WHERE source_id = ? ORDER BY position ASC, change_name ASC",
+            (source_id,),
+        ).fetchall()
+    return {
+        r["change_name"]: _sequence_row(r)
+        for r in rows
+        if not names or r["change_name"] in names
+    }
+
+
+def set_change_sequence(
+    source_id: str,
+    change_names: list[str],
+    *,
+    group_id: str = "default",
+    dependencies: dict[str, list[str]] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Explicitly set agent-declared order/dependencies for a set of changes."""
+    source_id = (source_id or "").strip()
+    group_id = (group_id or "default").strip() or "default"
+    names: list[str] = []
+    seen: set[str] = set()
+    for raw in change_names or []:
+        name = str(raw or "").strip()
+        if name and name not in seen:
+            names.append(name)
+            seen.add(name)
+    if not source_id or not names:
+        return {}
+    deps = dependencies or {}
+    now = time.time()
+    with _connect() as conn:
+        existing_rows = conn.execute(
+            "SELECT change_name, first_seen_at FROM change_sequence WHERE source_id = ?",
+            (source_id,),
+        ).fetchall()
+        first_seen = {r["change_name"]: r["first_seen_at"] for r in existing_rows}
+        for index, name in enumerate(names, start=1):
+            depends_on = [str(item).strip() for item in deps.get(name, []) if str(item).strip()]
+            conn.execute(
+                """
+                INSERT INTO change_sequence (source_id, change_name, group_id, position, depends_on, first_seen_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(source_id, change_name) DO UPDATE SET
+                    group_id = excluded.group_id,
+                    position = excluded.position,
+                    depends_on = excluded.depends_on,
+                    updated_at = excluded.updated_at
+                """,
+                (source_id, name, group_id, index, json.dumps(depends_on), first_seen.get(name, now), now),
+            )
+        conn.commit()
+    return get_change_sequence(source_id, names)
 
 
 def parse_identifier(identifier: str) -> tuple[str, Optional[str]]:

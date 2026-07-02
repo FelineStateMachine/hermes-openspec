@@ -13,7 +13,7 @@ This plugin closes both gaps:
 
 ## What you get
 
-**Agent tools** — 19 tools covering the full OpenSpec lifecycle: idea capture and enrichment, change creation/promotion/archival, task tracking, spec validation, semantic spec diffing, spec create/show/list, and context resolution.
+**Agent tools** — 20 tools covering the full OpenSpec lifecycle: idea capture and enrichment, change creation/promotion/archival, task tracking, spec validation, semantic spec diffing, spec create/show/list, context resolution, and a CLI passthrough (`openspec_cli`).
 
 | Group | Tools |
 |---|---|
@@ -22,10 +22,13 @@ This plugin closes both gaps:
 | Changes | `openspec_change_create`, `openspec_change_promote`, `openspec_change_archive`, `openspec_change_unarchive` |
 | Tasks | `openspec_task_list`, `openspec_task_set_status` |
 | Specs | `openspec_spec_diff`, `openspec_spec_create`, `openspec_spec_show`, `openspec_spec_list` |
+| CLI passthrough | `openspec_cli` |
 
 `openspec_context`, `openspec_spec_diff`, `openspec_spec_create`, `openspec_spec_show`, `openspec_spec_list`, and the lifecycle write tools (idea/change/task) are filesystem-backed and always available. `openspec_list`, `openspec_show`, `openspec_validate`, `openspec_status`, and `openspec_instructions` require the `openspec` CLI binary.
 
 For the full tool reference, lifecycle states, and delegation patterns, see [docs/index.md](docs/index.md).
+
+**Bundled skills** — 11 upstream OpenSpec workflow skills (`openspec-propose`, `openspec-apply-change`, `openspec-verify-change`, etc.) are bundled and auto-registered. The agent loads them when user intent matches (e.g. "propose a change for dark mode" → `openspec-propose`). Skills instruct the agent to run the `openspec` CLI directly — they don't use the plugin's tool wrappers. See [docs/layers.md](docs/layers.md) for the layer architecture.
 
 **Dashboard tab** (`/openspec`):
 

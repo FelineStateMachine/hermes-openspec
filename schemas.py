@@ -239,6 +239,38 @@ OPENSPEC_TASK_LIST = {
     "parameters": {"type": "object", "properties": {**PROJECT_PROPS, "change": {"type": "string"}, "change_id": {"type": "string"}}, "required": ["change"]},
 }
 
+OPENSPEC_CHANGE_SEQUENCE_SET = {
+    "name": "openspec_change_sequence_set",
+    "description": (
+        "Declare dashboard-local review order and dependency/proof relationships for active OpenSpec changes. "
+        "Use after creating multiple related changes so the dashboard and later agents know the intended sequence. "
+        "Stores metadata in the Hermes OpenSpec plugin DB only; it does not modify OpenSpec files."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            **PROJECT_PROPS,
+            "changes": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Ordered change names or tokens, e.g. five prerequisite changes followed by the final proving change.",
+            },
+            "group_id": {"type": "string", "description": "Optional sequence group label. Defaults to 'default'."},
+            "dependencies": {
+                "type": "object",
+                "additionalProperties": {"type": "array", "items": {"type": "string"}},
+                "description": "Optional map of change name/token -> prerequisite/proving change names/tokens. Example: {final: [phase1, phase2]}.",
+            },
+            "depends_on": {
+                "type": "object",
+                "additionalProperties": {"type": "array", "items": {"type": "string"}},
+                "description": "Alias for dependencies.",
+            },
+        },
+        "required": ["changes"],
+    },
+}
+
 OPENSPEC_TASK_SET_STATUS = {
     "name": "openspec_task_set_status",
     "description": "Set selected checklist task ids in an OpenSpec change to todo or done.",
@@ -416,6 +448,41 @@ OPENSPEC_SPEC_SHOW = {
             },
         },
         "required": ["spec"],
+    },
+}
+
+OPENSPEC_CLI = {
+    "name": "openspec_cli",
+    "description": (
+        "Run the openspec CLI binary directly and return raw output. "
+        "Use this for CLI commands that need the exact upstream JSON format "
+        "(e.g. `openspec status --change <name> --json` returns applyRequires, "
+        "artifacts, contextFiles, actionContext). The plugin's other tools "
+        "(openspec_show, openspec_status, etc.) return different JSON shapes — "
+        "use openspec_cli when you need the CLI's native output. "
+        "Requires the openspec binary to be installed."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "command": {
+                "type": "string",
+                "description": (
+                    "Openspec CLI command and arguments without the binary name "
+                    "(e.g. 'status --change my-change', 'list --specs', "
+                    "'instructions apply --change my-change')."
+                ),
+            },
+            "workdir": {
+                "type": "string",
+                "description": "Working directory (repo root). Defaults to current directory.",
+            },
+            "json_output": {
+                "type": "boolean",
+                "description": "If true (default), appends --json to the command and returns parsed JSON. If false, returns raw text output.",
+            },
+        },
+        "required": ["command"],
     },
 }
 

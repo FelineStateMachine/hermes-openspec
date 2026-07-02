@@ -243,20 +243,51 @@
   function Board(_ref7) {
     var source = _ref7.source, onSelectItem = _ref7.onSelectItem;
     var board = source.openspec;
+    var _ft = useState(""), _sa = useState(true);
+    var filterText = _ft[0], setFilterText = _ft[1];
+    var showArchived = _sa[0], setShowArchived = _sa[1];
     if (!board) return h("p", { className: "os-empty" }, "No openspec/ content found.");
+    var filter = filterText.trim().toLowerCase();
+    function matchesFilter(it) {
+      if (!filter) return true;
+      return (it.title || it.name || "").toLowerCase().indexOf(filter) >= 0 ||
+             (it.name || "").toLowerCase().indexOf(filter) >= 0 ||
+             (it.token || "").toLowerCase().indexOf(filter) >= 0;
+    }
+    function sequencePosition(it) {
+      return it && it.sequence && typeof it.sequence.position === "number" ? it.sequence.position : Number.MAX_SAFE_INTEGER;
+    }
+    function sortBySequence(items) {
+      return (items || []).slice().sort(function (a, b) {
+        var ap = sequencePosition(a), bp = sequencePosition(b);
+        if (ap !== bp) return ap - bp;
+        return String(a.title || a.name || "").localeCompare(String(b.title || b.name || ""));
+      });
+    }
     var byCol = {};
     COLUMN_ORDER.forEach(function (c) { byCol[c] = []; });
-    board.ideas.forEach(function (it) { byCol.ideas.push(it); });
+    board.ideas.forEach(function (it) { if (matchesFilter(it)) byCol.ideas.push(it); });
     board.changes.forEach(function (ch) { var s = ch.status || "draft"; (byCol[s] || (byCol[s] = [])).push(ch); });
+    // Filter changes in non-archived columns too
+    COLUMN_ORDER.forEach(function (c) {
+      if (c !== "ideas") byCol[c] = (byCol[c] || []).filter(matchesFilter);
+    });
+    var visibleColumns = COLUMN_ORDER.filter(function (c) { return c !== "archived" || showArchived; });
+    var totalVisible = visibleColumns.reduce(function (n, c) { return n + (byCol[c] || []).length; }, 0);
     return h("div", { className: "os-board" },
       h("div", { className: "os-board-head" },
         h("span", { className: "os-repo-name" }, source.name),
         h(CopyChip, { text: source.name }),
         h("span", { className: "os-repo-path" }, source.path)
       ),
+      h("div", { className: "os-board-filter" },
+        h(Input, { placeholder: "🔍 Filter by title, name, or token…", value: filterText, onChange: function (e) { setFilterText(e.target.value); }, className: "os-filter-input" }),
+        h(Button, { variant: showArchived ? "default" : "outline", size: "sm", onClick: function () { setShowArchived(!showArchived); } }, "Archived " + (showArchived ? "✓" : "✗"))
+      ),
+      totalVisible === 0 && filter ? h("div", { className: "os-empty" }, "No cards match \"" + filterText + "\"") :
       h("div", { className: "os-cols" },
-        COLUMN_ORDER.map(function (col) {
-          var items = byCol[col] || [];
+        visibleColumns.map(function (col) {
+          var items = sortBySequence(byCol[col] || []);
           return h("div", { key: col, className: "os-col" },
             h("div", { className: "os-col-head" },
               h("span", null, STATUS_LABEL[col] || col),
@@ -275,7 +306,10 @@
                   return h("button", {
                     key: it.id || it.name, className: cn("os-card", STATUS_TONE[it.status] || ""), onClick: function () { onSelectItem(it); },
                   },
-                    h("div", { className: "os-card-title" }, it.title || it.name),
+                    h("div", { className: "os-card-title" },
+                      it.sequence ? h("span", { className: "os-card-seq", title: "Sequence " + it.sequence.position + (it.sequence.dependsOn && it.sequence.dependsOn.length ? "; depends on " + it.sequence.dependsOn.join(", ") : "") }, "#" + it.sequence.position) : null,
+                      it.title || it.name
+                    ),
                     h("div", { className: "os-card-foot" },
                       h("span", { className: "os-card-artifacts" },
                         artifacts.map(function (a, i) { return h("span", { key: i, className: cn("os-card-dot", !a.on && "os-card-dot-off"), title: a.label }); })
@@ -674,10 +708,12 @@
     var _m = useState("current"), _b2 = useState(null), _l2 = useState(true), _e3 = useState("");
     var _sel = useState(null), _bf = useState(""), _af = useState("");
     var _sm = useState("alpha");
+    var _sdm = useState("semantic");
     var mode = _m[0], setMode = _m[1], browser = _b2[0], setBrowser = _b2[1];
     var loading = _l2[0], setLoading = _l2[1], err = _e3[0], setErr = _e3[1];
     var selPath = _sel[0], setSelPath = _sel[1], before = _bf[0], setBefore = _bf[1], after = _af[0], setAfter = _af[1];
     var sortMode = _sm[0], setSortMode = _sm[1];
+    var selDiffModes = _sdm;
     var firstLoad = useRef(true);
 
     function load(currentMode, b, a) {
@@ -767,13 +803,28 @@
                   selFile.mtime ? h("span", { title: selFile.mtime }, "edited ", isoTimeAgo(selFile.mtime)) : null
                 ) : null,
                 mode === "current" ? h(SpecContentView, { md: selFile.after }) :
-                  h("div", { className: "os-spec-diff" },
-                    h("div", { className: "os-diff-cols" },
-                      h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "before"), h(SpecContentView, { md: selFile.before })),
-                      h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "after"), h(SpecContentView, { md: selFile.after }))
-                    ),
-                    selFile.diff ? h("pre", { className: "os-diff-unified" }, selFile.diff) : null
-                  )
+                  (function () {
+                    var diffModes = ["semantic", "split", "raw"];
+                    var diffLabels = { semantic: "Semantic", split: "Side-by-side", raw: "Raw" };
+                    // viewMode state is hoisted to SpecsView via a ref-like closure
+                    var selDiffMode = selDiffModes[0];
+                    function setDiffMode(m) { selDiffModes[1](m); }
+                    return h("div", { className: "os-spec-diff" },
+                      h("div", { className: "os-specs-diff-modes" },
+                        diffModes.map(function (dm) {
+                          return h(Button, { key: dm, variant: selDiffMode === dm ? "default" : "outline", size: "sm", onClick: function () { setDiffMode(dm); } }, diffLabels[dm]);
+                        })
+                      ),
+                      selDiffMode === "semantic" && selFile.semantic_diff
+                        ? h(SpecDeltaView, { semanticDiff: selFile.semantic_diff, lineDiff: selFile.diff, specPath: selFile.path })
+                        : selDiffMode === "split"
+                          ? h("div", { className: "os-diff-cols" },
+                              h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "before"), h(SpecContentView, { md: selFile.before })),
+                              h("div", { className: "os-diff-col" }, h("div", { className: "os-diff-col-head" }, "after"), h(SpecContentView, { md: selFile.after }))
+                            )
+                          : selFile.diff ? h("pre", { className: "os-diff-unified" }, selFile.diff) : null
+                    );
+                  })()
               ) : h("p", { className: "os-empty" }, "Select a spec.")
             );
           })() : h("p", { className: "os-empty" }, mode === "dirty" ? "No changes between HEAD and worktree." : mode === "refs" ? "No differences between refs." : "No specs found.")

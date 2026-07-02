@@ -300,10 +300,17 @@ def openspec_context(args: dict, **kwargs) -> str:
             "specs": specs,
         }
     else:
+        change_dirs = [(change_dir, archived) for change_dir, archived in _iter_change_dirs(repo_path) if not archived]
+        sequence = {}
+        if hasattr(registry, "ensure_change_sequence"):
+            sequence = registry.ensure_change_sequence(str(source.get("id") or source.get("token")), [change_dir.name for change_dir, _ in change_dirs])
         changes = [
-            {"name": change_dir.name, "token": registry.change_token(change_dir.name)}
-            for change_dir, archived in _iter_change_dirs(repo_path)
-            if not archived
+            {
+                "name": change_dir.name,
+                "token": registry.change_token(change_dir.name),
+                **({"sequence": sequence[change_dir.name]} if change_dir.name in sequence else {}),
+            }
+            for change_dir, archived in change_dirs
         ]
         specs = [
             {"path": rel, "token": registry.change_token(f"spec:{rel}")}
@@ -422,7 +429,7 @@ def _markdown_list(items: list[str]) -> str:
     return "\n".join(f"- {item}" for item in items)
 
 
-_TASK_LINE_RE = re.compile(r"^(?P<prefix>\s*- \[)(?P<mark>[ xX])(?P<suffix>\]\s*(?P<id>\d+(?:\.\d+)*)\s+(?P<text>.*?))\s*$")
+_TASK_LINE_RE = re.compile(r"^(?P<prefix>\s*- \[)(?P<mark>[ xX])(?P<suffix>\]\s*(?:(?P<id>\d+(?:\.\d+)*)\s+)?(?P<text>.*?))\s*$")
 
 
 def _change_path(root: Path, change: str, *, archived: bool = False) -> Path:
@@ -445,6 +452,24 @@ def _resolve_change_path(root: Path, change_ref: str) -> tuple[Path | None, bool
     return None, False
 
 
+def _resolve_change_names(root: Path, registry, refs: list[str]) -> tuple[list[str], list[str]]:
+    names: list[str] = []
+    missing: list[str] = []
+    by_name = {change_dir.name: change_dir.name for change_dir, _ in _iter_change_dirs(root)}
+    by_token = {registry.change_token(name): name for name in by_name}
+    for ref in refs:
+        raw = str(ref or "").strip()
+        if not raw:
+            continue
+        name = by_name.get(raw) or by_token.get(raw)
+        if name:
+            if name not in names:
+                names.append(name)
+        else:
+            missing.append(raw)
+    return names, missing
+
+
 def _derive_status(tasks_path: Path, *, archived: bool = False) -> str:
     if archived:
         return "archived"
@@ -465,12 +490,15 @@ def _parse_tasks(tasks_path: Path) -> list[dict[str, Any]]:
     if not tasks_path.is_file():
         return []
     tasks: list[dict[str, Any]] = []
+    seq = 0
     for line_no, line in enumerate(tasks_path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
         match = _TASK_LINE_RE.match(line)
         if not match:
             continue
+        seq += 1
+        task_id = match.group("id") or str(seq)
         tasks.append({
-            "id": match.group("id"),
+            "id": task_id,
             "text": match.group("text").strip(),
             "status": "done" if match.group("mark").lower() == "x" else "todo",
             "line": line_no,
@@ -888,6 +916,58 @@ def openspec_change_promote(args: dict, **kwargs) -> str:
     })
 
 
+def openspec_change_sequence_set(args: dict, **kwargs) -> str:
+    """Set dashboard-local order/dependency metadata for active changes."""
+    root, err, context = _resolve_project(args)
+    if err or root is None:
+        return _error(err or "workdir could not be resolved")
+    registry = _registry_module()
+    if registry is None or not hasattr(registry, "set_change_sequence"):
+        return _error("OpenSpec registry sequence support unavailable")
+    source = context.get("source") if isinstance(context, dict) else None
+    if source is None:
+        source = registry.get_source_by_path(str(root))
+    if source is None:
+        return _error("sequence metadata requires a registered OpenSpec source; pass identifier/project or register the repo in the dashboard", workdir=str(root))
+    raw_changes = _coerce_string_list(args.get("changes"))
+    changes, missing = _resolve_change_names(root, registry, raw_changes)
+    if missing:
+        return _error("some changes were not found", missing=missing, workdir=str(root))
+    if not changes:
+        return _error("changes is required")
+    raw_deps = args.get("dependencies") or args.get("depends_on") or {}
+    if raw_deps is None:
+        raw_deps = {}
+    if not isinstance(raw_deps, dict):
+        return _error("dependencies must be an object mapping change names/tokens to arrays of prerequisite change names/tokens")
+    dependencies: dict[str, list[str]] = {}
+    dep_missing: list[str] = []
+    for raw_key, raw_values in raw_deps.items():
+        key_names, key_missing = _resolve_change_names(root, registry, [str(raw_key)])
+        dep_names, missing_deps = _resolve_change_names(root, registry, _coerce_string_list(raw_values))
+        if key_missing:
+            dep_missing.extend(key_missing)
+            continue
+        if missing_deps:
+            dep_missing.extend(missing_deps)
+        if key_names:
+            dependencies[key_names[0]] = dep_names
+    if dep_missing:
+        return _error("some dependency changes were not found", missing=dep_missing, workdir=str(root))
+    source_id = str(source.get("id") or source.get("token"))
+    group_id = str(args.get("group_id") or args.get("groupId") or "default").strip() or "default"
+    sequence = registry.set_change_sequence(source_id, changes, group_id=group_id, dependencies=dependencies)
+    return json.dumps({
+        "ok": True,
+        "source": registry.effective_name(source),
+        "source_id": source_id,
+        "workdir": str(root),
+        "groupId": group_id,
+        "changes": [{"name": name, "token": registry.change_token(name), "sequence": sequence.get(name, {})} for name in changes],
+        "note": "Sequence/dependency metadata is stored in the Hermes OpenSpec plugin DB, not in OpenSpec files.",
+    })
+
+
 def openspec_task_list(args: dict, **kwargs) -> str:
     root, err, _context = _resolve_project(args)
     if err or root is None:
@@ -938,23 +1018,45 @@ def openspec_task_set_status(args: dict, **kwargs) -> str:
     if not tasks_path.is_file():
         return _error(f"tasks not found for change: {change}")
     lines = tasks_path.read_text(encoding="utf-8", errors="replace").splitlines()
-    found: set[str] = set()
+    # Build a lookup of parsed tasks so we can match by numeric ID or text substring.
+    parsed = _parse_tasks(tasks_path)
+    # Resolve each requested task_id to actual line numbers.
+    # Accept: numeric IDs (exact match), or text substrings (case-insensitive).
+    target_lines: set[int] = set()
+    not_found: list[str] = []
+    for requested in task_ids:
+        # Try exact numeric ID match first
+        id_matches = [t for t in parsed if t["id"] == requested]
+        if id_matches:
+            for t in id_matches:
+                target_lines.add(t["line"])
+            continue
+        # Try text substring match (case-insensitive)
+        needle = requested.lower()
+        text_matches = [t for t in parsed if needle in t["text"].lower()]
+        if text_matches:
+            for t in text_matches:
+                target_lines.add(t["line"])
+            continue
+        not_found.append(requested)
+    if not_found:
+        return _error("task ids not found: " + ", ".join(not_found), missing=not_found)
+    # Rewrite matching lines
     updated_lines = []
-    for line in lines:
-        match = _TASK_LINE_RE.match(line)
-        if match and match.group("id") in task_ids:
-            found.add(match.group("id"))
-            line = f"{match.group('prefix')}{mark}{match.group('suffix')}"
+    matched_ids: set[str] = set()
+    for line_no, line in enumerate(lines, start=1):
+        if line_no in target_lines:
+            match = _TASK_LINE_RE.match(line)
+            if match:
+                matched_ids.add(match.group("id") or str(line_no))
+                line = f"{match.group('prefix')}{mark}{match.group('suffix')}"
         updated_lines.append(line)
-    missing = sorted(task_ids - found)
-    if missing:
-        return _error("task ids not found: " + ", ".join(missing), missing=missing)
     tasks_path.write_text("\n".join(updated_lines) + "\n", encoding="utf-8")
     tasks = _parse_tasks(tasks_path)
     return json.dumps({
         "ok": True,
         "change": change,
-        "updated": sorted(found),
+        "updated": sorted(matched_ids),
         "set_status": normalized,
         "path": str(tasks_path),
         "relative_path": _relative(tasks_path, root),
@@ -1392,4 +1494,82 @@ def openspec_spec_list(args: dict, **kwargs) -> str:
         "specs": names,
         "count": len(names),
         "workdir": str(root),
+    })
+
+
+def openspec_cli(args: dict, **kwargs) -> str:
+    """Run the openspec CLI binary directly and return raw output.
+
+    This is a passthrough tool — it runs ``openspec <command> [--json]`` and
+    returns the raw stdout. Use this when you need the CLI's native JSON format
+    (e.g. ``applyRequires``, ``artifacts``, ``contextFiles``) rather than the
+    plugin's wrapped JSON shapes.
+
+    Gated by ``check_fn`` — only appears when the openspec binary is available.
+    """
+    import shlex
+
+    exe = _openspec_bin()
+    if exe is None:
+        return _error("openspec CLI binary not found. Set OPENSPEC_BIN or install via npm.")
+
+    raw_command = str(args.get("command") or "").strip()
+    if not raw_command:
+        return _error("command is required (e.g. 'status --change my-change')")
+
+    try:
+        cmd_parts = shlex.split(raw_command)
+    except ValueError:
+        cmd_parts = raw_command.split()
+
+    json_output = args.get("json_output")
+    if json_output is None:
+        json_output = True
+    if json_output:
+        cmd_parts = [*cmd_parts, "--json"]
+
+    workdir = str(args.get("workdir") or "").strip()
+    if workdir:
+        root, err = _resolve_workdir(workdir)
+        if err or root is None:
+            return _error(err or "workdir could not be resolved")
+        cwd = str(root)
+    else:
+        cwd = None
+
+    try:
+        proc = subprocess.run(
+            [exe, *cmd_parts],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+            cwd=cwd,
+        )
+    except subprocess.TimeoutExpired:
+        return _error("openspec CLI command timed out (120s)")
+    except OSError as exc:
+        return _error(f"failed to run openspec CLI: {exc}")
+
+    stdout = proc.stdout or ""
+    stderr = proc.stderr or ""
+
+    if json_output and proc.returncode == 0:
+        try:
+            parsed = json.loads(stdout)
+            return json.dumps({
+                "ok": True,
+                "exit_code": proc.returncode,
+                "stdout": parsed,
+                "workdir": cwd,
+            })
+        except json.JSONDecodeError:
+            pass  # Fall through to raw output
+
+    return json.dumps({
+        "ok": proc.returncode == 0,
+        "exit_code": proc.returncode,
+        "stdout": stdout,
+        "stderr": stderr.strip() if stderr else "",
+        "workdir": cwd,
     })

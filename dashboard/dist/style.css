@@ -30,6 +30,8 @@
 /* Board */
 .os-board { display: flex; flex-direction: column; gap: 0.75rem; }
 .os-board-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.os-board-filter { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.os-filter-input { flex: 1; max-width: 24rem; font-size: 0.8rem; }
 .os-repo-name { font-weight: 600; font-size: 0.95rem; color: var(--color-foreground, #eee); }
 .os-repo-path { font-size: 0.75rem; color: var(--color-muted-foreground, #777); font-family: var(--theme-font-mono, monospace); }
 
@@ -41,7 +43,8 @@
 
 .os-card { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem; border-radius: var(--radius-sm, 0.375rem); border: 1px solid var(--color-border, #2a2a2a); background: var(--color-popover, #1a1a1a); text-align: left; cursor: pointer; transition: border-color 0.12s; }
 .os-card:hover { border-color: var(--color-primary, #555); }
-.os-card-title { font-size: 0.82rem; font-weight: 500; line-height: 1.3; color: var(--color-foreground, #eee); }
+.os-card-title { display: flex; align-items: baseline; gap: 0.375rem; font-size: 0.82rem; font-weight: 500; line-height: 1.3; color: var(--color-foreground, #eee); }
+.os-card-seq { flex: 0 0 auto; font-family: var(--theme-font-mono, monospace); font-size: 0.65rem; color: var(--color-muted-foreground, #777); }
 .os-card-foot { display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap; }
 .os-card-copy { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem; border: none; background: transparent; color: var(--color-muted-foreground, #777); cursor: pointer; border-radius: var(--radius-sm, 0.25rem); }
 .os-card-copy:hover { color: var(--color-foreground, #eee); background: var(--color-secondary, rgba(255,255,255,0.06)); }
@@ -131,6 +134,7 @@
 .os-specs-toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .os-specs-title { font-weight: 600; font-size: 0.9rem; color: var(--color-foreground, #eee); }
 .os-specs-modes { display: flex; gap: 0.25rem; }
+.os-specs-diff-modes { display: flex; gap: 0.25rem; margin-bottom: 0.5rem; }
 .os-refs-inputs { display: flex; gap: 0.375rem; align-items: center; }
 .os-ref-input { width: 9rem; font-size: 0.75rem; }
 .os-specs-changed { font-size: 0.78rem; color: #fbbf24; }
@@ -200,3 +204,156 @@
 
 /* Spec list semantic summary */
 .os-spec-item-summary { font-size: 0.65rem; font-family: var(--theme-font-mono, monospace); color: var(--color-muted-foreground, #999); margin-left: auto; white-space: nowrap; }
+
+/* Mobile: the spec browser's desktop two-pane view is too wide for phones. */
+@media (max-width: 760px) {
+  .os-page {
+    padding: 0.5rem;
+    gap: 0.625rem;
+    overflow-x: hidden;
+  }
+
+  .os-toolbar,
+  .os-specs-toolbar,
+  .os-board-head,
+  .os-board-filter {
+    align-items: stretch;
+  }
+
+  .os-toolbar label,
+  .os-specs-title,
+  .os-repo-name,
+  .os-repo-path,
+  .os-specs-changed {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .os-toolbar label,
+  .os-specs-title,
+  .os-repo-name {
+    width: 100%;
+  }
+
+  .os-toolbar-actions {
+    margin-left: 0;
+  }
+
+  .os-page div.relative:has(> button[role="combobox"]) {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .os-view-switch,
+  .os-specs-modes,
+  .os-specs-diff-modes {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.125rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .os-view-switch button,
+  .os-specs-modes button,
+  .os-specs-diff-modes button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .os-refs-inputs,
+  .os-board-filter {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .os-ref-input,
+  .os-filter-input {
+    flex: 1 1 9rem;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .os-specs-grid {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .os-specs-list {
+    flex-direction: row;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.375rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .os-spec-item {
+    flex: 0 0 13rem;
+    min-width: 0;
+  }
+
+  .os-spec-item-path,
+  .os-specs-detail-path,
+  .os-spec-req-name,
+  .os-spec-scn-name,
+  .os-spec-step-text,
+  .os-card-title {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .os-specs-detail {
+    max-height: none;
+    min-width: 0;
+    padding: 0.625rem;
+  }
+
+  .os-specs-detail-head,
+  .os-specs-meta,
+  .os-spec-req-head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .os-chip {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .os-spec-scn {
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+  }
+
+  .os-spec-step {
+    gap: 0.25rem;
+  }
+
+  .os-spec-step-label {
+    min-width: 2.1rem;
+    text-align: left;
+  }
+
+  .os-diff-cols,
+  .os-delta-scenario-change {
+    grid-template-columns: 1fr;
+  }
+
+  .os-diff-col,
+  .os-diff-unified {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .os-overlay {
+    padding: 0.5rem;
+  }
+
+  .os-modal-body {
+    max-height: calc(100vh - 6rem);
+  }
+}

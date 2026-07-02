@@ -253,11 +253,10 @@ def _idea_summary(path: Path, source_id: str) -> Optional[dict[str, Any]]:
     }
 
 
-def _scan(root: Path) -> Optional[dict[str, Any]]:
+def _scan(root: Path, source_id: str) -> Optional[dict[str, Any]]:
     openspec_root = root / "openspec"
     if not openspec_root.is_dir():
         return None
-    source_id = root.name
     changes: list[dict[str, Any]] = []
     ideas: list[dict[str, Any]] = []
     specs: list[dict[str, Any]] = []
@@ -308,6 +307,16 @@ def _scan(root: Path) -> Optional[dict[str, Any]]:
         except OSError:
             pass
 
+    if _registry is not None and hasattr(_registry, "ensure_change_sequence"):
+        try:
+            sequence = _registry.ensure_change_sequence(source_id, [str(ch.get("name") or "") for ch in changes])
+            for change in changes:
+                meta = sequence.get(str(change.get("name") or ""))
+                if meta:
+                    change["sequence"] = meta
+        except Exception:
+            pass
+
     by_status = {s: 0 for s in _STATUSES}
     by_status["ideas"] = len(ideas)
     for change in changes:
@@ -346,7 +355,7 @@ def _source_payload(source: dict[str, Any]) -> dict[str, Any]:
         **base,
         "valid": True,
         "repoRoot": str(root),
-        "openspec": _scan(root),
+        "openspec": _scan(root, str(base["id"])),
         "error": None,
     }
 
@@ -715,6 +724,7 @@ def _spec_browser(root: Path, before: str = "", after: str = "", dirty: bool = F
             "after": after_content,
             "diff": _spec_diff(before_content, after_content, rel) if status not in {"unchanged", "missing"} else "",
             "semantic_summary": _compute_semantic_summary(before_content, after_content) if status not in {"unchanged", "missing"} else None,
+            "semantic_diff": _compute_semantic_diff(before_content, after_content) if status not in {"unchanged", "missing"} else None,
         })
 
     return {
