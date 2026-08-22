@@ -185,7 +185,27 @@ def _status(has_tasks: bool, stats: Optional[dict[str, int]], *, archived: bool)
 
 def _title_from_markdown(path: Path, fallback: str) -> str:
     try:
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        lines = text.splitlines()
+        content_start = 0
+        if lines and lines[0].strip() == "---":
+            closing_index = next(
+                (i for i, line in enumerate(lines[1:], start=1) if line.strip() == "---"),
+                None,
+            )
+            if closing_index is not None:
+                frontmatter_title: str | None = None
+                for line in lines[1:closing_index]:
+                    stripped = line.strip()
+                    if stripped.startswith("title:"):
+                        val = stripped[6:].strip().strip('"').strip("'")
+                        if val:
+                            frontmatter_title = val
+                if frontmatter_title:
+                    return frontmatter_title
+                content_start = closing_index + 1
+
+        for line in lines[content_start:]:
             stripped = line.strip()
             if stripped.startswith("# "):
                 return stripped[2:].strip() or fallback

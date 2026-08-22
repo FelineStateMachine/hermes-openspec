@@ -121,3 +121,62 @@ hermes-openspec/
 | `dashboard/plugin_api.py` | All backend API routes and the spec-browser logic |
 | `dashboard/manifest.json` | Tab registration, entry points |
 | `dashboard/dist/index.js` | Frontend: board, specs view, source dialogs, deep-linking |
+
+## Hermes Desktop Plugin
+
+A read-only OpenSpec project surface runs inside Hermes Desktop as a runtime plugin.
+
+### Install
+
+Copy `desktop/plugin.js` to the Hermes Desktop plugin directory:
+
+- **Windows:** `%LOCALAPPDATA%\hermes\desktop-plugins\openspec\plugin.js`
+- **Linux/macOS:** `~/.hermes/desktop-plugins/openspec/plugin.js`
+
+The plugin is discovered automatically on Desktop startup. No restart is required after the first install — the runtime watcher picks up the new module.
+
+### Enablement
+
+Plugins are disabled by default (`defaultEnabled: false`). Enable via the Desktop settings UI or by toggling the plugin in the Hermes configuration.
+
+### What it shows
+
+- **Source selector** with project counts (changes, ideas, specs)
+- **Source management** — add, edit, and remove registry entries (remove requires explicit confirmation), refresh, and initialize a registered repository that is missing the standard `openspec/` layout
+- **Work view** — Ideas, Draft, Todo, In Progress, Done, Archived columns with filter and archived toggle
+- **Change detail** — Proposal, Tasks, Design, Specs tabs with task progress
+- **Idea detail** — readable markdown content
+- **Specs browser** — current spec list, selected content, worktree diffs (semantic, side-by-side, raw)
+
+### Agent context resolution
+
+The `openspec_context` tool resolves registered source references to changes,
+specs, and ideas, including archived changes, and rejects ambiguous tokens
+instead of guessing.
+
+### Read-only scope
+
+OpenSpec artifacts — changes, proposals, designs, specs, ideas, tasks, and documents — are read-only in the Desktop surface: no task completion, artifact editing, or file writes are exposed, and the plugin never accesses repository files or paths client-side. The one managed surface is the source registry, mirroring the dashboard: add, edit, remove (registry entry only, after explicit confirmation — repository files are never deleted), refresh, and standard OpenSpec initialization for a registered repository missing the `openspec/` layout. These controls use only the existing dashboard source endpoints (`POST /sources`, `PUT /sources/{source_id}`, `DELETE /sources/{source_id}`, `POST /sources/{source_id}/init`); initialization may create the standard `openspec/` layout when missing and preserves existing artifacts.
+
+### Remote backend behavior
+
+All data flows through `ctx.rest()` namespace-scoped API calls. The plugin works identically when Desktop connects to a local or remote Hermes backend. No client-side code reads backend repository paths — Windows Desktop sessions never access VPS filesystem paths.
+
+### Rollback
+
+Before any separately approved deployment, capture the currently installed `plugin.js` bytes, SHA-256, byte size, and exact rollback backup path; verify the backup reproduces the recorded hash. That immediate pre-deployment backup is the only authoritative rollback baseline. Historical spike commits and prior deployment hashes are not rollback substitutes.
+
+### Tests
+
+```bash
+node tests/desktop-plugin-smoke.mjs          # 681 tests: contract, helpers, source registry, UI verification
+node tests/lane-override-behavior.mjs        # 23 tests: lane override/source/phase behavior
+node spikes/001-desktop-route-api/smoke.mjs # 36 tests: legacy seam validation
+PYTHONPATH=<hermes-agent repo> python3 -m pytest -q tests/ # 64 passed, 2 skipped
+```
+
+### Runtime constraints
+
+- Single uncompiled ESM file (no bundler)
+- Imports: `@hermes/plugin-sdk`, `react`, `react/jsx-runtime` only
+- No JSX syntax, new npm dependencies, direct `fetch`, or absolute API URLs

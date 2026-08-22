@@ -98,6 +98,93 @@ def test_dashboard_scan_attaches_sequence_without_openspec_files(tmp_path, monke
     assert not (openspec_root / "alpha" / ".sequence").exists()
 
 
+def test_title_from_markdown_prefers_closed_frontmatter_title(tmp_path):
+    path = tmp_path / "proposal.md"
+    path.write_text(
+        "---\n"
+        "title: Human-readable title\n"
+        "created: 2026-08-21\n"
+        "---\n"
+        "# Heading fallback\n",
+        encoding="utf-8",
+    )
+
+    assert plugin_api._title_from_markdown(path, "change-id") == "Human-readable title"
+
+
+def test_title_from_markdown_uses_h1_without_frontmatter(tmp_path):
+    path = tmp_path / "proposal.md"
+    path.write_text("# Heading title\n\nBody\n", encoding="utf-8")
+
+    assert plugin_api._title_from_markdown(path, "change-id") == "Heading title"
+
+
+def test_title_from_markdown_uses_identifier_without_title_or_h1(tmp_path):
+    path = tmp_path / "proposal.md"
+    path.write_text("Body without a title\n", encoding="utf-8")
+
+    assert plugin_api._title_from_markdown(path, "change-id") == "change-id"
+
+
+def test_title_from_markdown_ignores_nonleading_frontmatter_looking_block(tmp_path):
+    path = tmp_path / "proposal.md"
+    path.write_text(
+        "# Real heading\n"
+        "\n"
+        "---\n"
+        "title: Not metadata\n"
+        "---\n",
+        encoding="utf-8",
+    )
+
+    assert plugin_api._title_from_markdown(path, "change-id") == "Real heading"
+
+
+def test_title_from_markdown_falls_back_after_unclosed_frontmatter(tmp_path):
+    path = tmp_path / "proposal.md"
+    path.write_text(
+        "---\n"
+        "title: Unusable because the block is unclosed\n"
+        "# Heading fallback\n",
+        encoding="utf-8",
+    )
+
+    assert plugin_api._title_from_markdown(path, "change-id") == "Heading fallback"
+
+
+def test_change_summary_exposes_frontmatter_title(tmp_path):
+    change_dir = tmp_path / "change-id"
+    change_dir.mkdir()
+    (change_dir / "proposal.md").write_text(
+        "---\n"
+        "title: Change summary title\n"
+        "---\n"
+        "## Summary\n",
+        encoding="utf-8",
+    )
+
+    summary = plugin_api._change_summary(change_dir, "ivault")
+
+    assert summary is not None
+    assert summary["title"] == "Change summary title"
+
+
+def test_idea_summary_exposes_frontmatter_title(tmp_path):
+    idea_path = tmp_path / "idea-id.md"
+    idea_path.write_text(
+        "---\n"
+        "title: Idea summary title\n"
+        "---\n"
+        "## Summary\n",
+        encoding="utf-8",
+    )
+
+    summary = plugin_api._idea_summary(idea_path, "ivault")
+
+    assert summary is not None
+    assert summary["title"] == "Idea summary title"
+
+
 def test_change_sequence_tool_declares_order_and_dependencies(tmp_path, monkeypatch):
     monkeypatch.setattr(registry, "db_path", lambda: tmp_path / "openspec.db")
     monkeypatch.setattr(tools, "_registry_module", lambda: registry)
@@ -127,3 +214,87 @@ def test_change_sequence_tool_declares_order_and_dependencies(tmp_path, monkeypa
     context = json.loads(tools.openspec_context({"identifier": "demo"}))
     final = next(item for item in context["changes"] if item["name"] == "final-proof")
     assert final["sequence"]["dependsOn"] == ["phase-one", "phase-two"]
+
+
+# ---------------------------------------------------------------------------
+# Idea resolution (ivault/os_fd3445 tasks 1.3): openspec_context must list and
+# resolve registered idea references using the same source-qualified shape as
+# changes, and must fail explicitly on cross-kind token ambiguity.
+# ---------------------------------------------------------------------------
+
+
+def _register_demo_source(tmp_path, monkeypatch):
+    """Isolate registry DB to tmp and point tools at the real registry module."""
+    monkeypatch.setattr(registry, "db_path", lambda: tmp_path / "openspec.db")
+    monkeypatch.setattr(tools, "_registry_module", lambda: registry)
+    registry.add_source(str(tmp_path), "demo")
+
+
+def _write_idea(tmp_path, stem: str, body: str = "Idea body text"):
+    ideas_root = tmp_path / "openspec" / "ideas"
+    ideas_root.mkdir(parents=True, exist_ok=True)
+    idea_file = ideas_root / f"{stem}.md"
+    idea_file.write_text(f"---\ntitle: {stem.title()}\n---\n{body}\n", encoding="utf-8")
+    return idea_file
+
+
+def test_openspec_context_lists_ideas_for_bare_source(tmp_path, monkeypatch):
+    _register_demo_source(tmp_path, monkeypatch)
+    _write_idea(tmp_path, "hermes-agentmail-inbox-integration")
+
+    result = json.loads(tools.openspec_context({"identifier": "demo"}))
+
+    assert result["ok"] is True
+    ideas = result["ideas"]
+    assert len(ideas) == 1
+    idea = ideas[0]
+    assert idea["name"] == "hermes-agentmail-inbox-integration"
+    assert idea["filename"] == "hermes-agentmail-inbox-integration.md"
+    assert idea["token"] == "os_1655dd"
+
+
+def test_openspec_context_resolves_idea_by_token(tmp_path, monkeypatch):
+    _register_demo_source(tmp_path, monkeypatch)
+    _write_idea(tmp_path, "hermes-agentmail-inbox-integration")
+
+    result = json.loads(tools.openspec_context({"identifier": "demo/os_1655dd"}))
+
+    assert result["ok"] is True
+    idea = result["idea"]
+    assert idea["name"] == "hermes-agentmail-inbox-integration"
+    assert idea["filename"] == "hermes-agentmail-inbox-integration.md"
+    assert idea["token"] == "os_1655dd"
+    assert "Idea body text" in idea["content"]
+
+
+def test_openspec_context_resolves_idea_by_literal_stem(tmp_path, monkeypatch):
+    _register_demo_source(tmp_path, monkeypatch)
+    _write_idea(tmp_path, "hermes-agentmail-inbox-integration")
+
+    result = json.loads(
+        tools.openspec_context({"identifier": "demo/hermes-agentmail-inbox-integration"})
+    )
+
+    assert result["ok"] is True
+    idea = result["idea"]
+    assert idea["name"] == "hermes-agentmail-inbox-integration"
+    assert idea["filename"] == "hermes-agentmail-inbox-integration.md"
+    assert idea["token"] == "os_1655dd"
+
+
+def test_openspec_context_reports_cross_kind_ambiguity(tmp_path, monkeypatch):
+    _register_demo_source(tmp_path, monkeypatch)
+    # Change folder and idea file share the same stem → identical derived token.
+    change_dir = tmp_path / "openspec" / "changes" / "same-artifact"
+    change_dir.mkdir(parents=True)
+    (change_dir / "proposal.md").write_text("# Same Artifact\n", encoding="utf-8")
+    _write_idea(tmp_path, "same-artifact")
+    token = registry.change_token("same-artifact")
+
+    result = json.loads(tools.openspec_context({"identifier": f"demo/{token}"}))
+
+    assert result["ok"] is False
+    error = result["error"].lower()
+    assert "ambiguous" in error
+    for kind in ("change", "spec", "idea"):
+        assert kind in error

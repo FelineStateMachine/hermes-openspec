@@ -227,6 +227,24 @@ def _resolve_spec(root: Path, registry, spec_ref: str) -> tuple[str | None, Path
     return None, None
 
 
+def _iter_ideas(root: Path):
+    """Yield every ``.md`` idea file under ``openspec/ideas/`` (sorted)."""
+    ideas_root = root / "openspec" / "ideas"
+    if ideas_root.is_dir():
+        for child in sorted(ideas_root.iterdir()):
+            if child.is_file() and child.suffix.lower() == ".md":
+                yield child
+
+
+def _resolve_idea(root: Path, registry, idea_ref: str) -> Path | None:
+    """Map an idea token (``os_xxx``) — or a literal idea stem (legacy) — to the
+    matching idea file. Returns ``None`` when nothing matches."""
+    for idea in _iter_ideas(root):
+        if registry.change_token(idea.stem) == idea_ref or idea.stem == idea_ref:
+            return idea
+    return None
+
+
 def openspec_context(args: dict, **kwargs) -> str:
     """Resolve a copyable identifier (``puzzletea`` or ``puzzletea/os_xxx``) into
     repo path + (optionally) the change's proposal/tasks/design/specs content."""
@@ -267,8 +285,31 @@ def openspec_context(args: dict, **kwargs) -> str:
 
     if change_ref:
         change_dir, archived = _resolve_change(repo_path, registry, change_ref)
+        spec_rel, spec_path = _resolve_spec(repo_path, registry, change_ref)
+        idea_path = _resolve_idea(repo_path, registry, change_ref)
+        matches = sum(
+            1 for matched in (change_dir is not None, spec_rel is not None, idea_path is not None) if matched
+        )
+        if matches > 1:
+            return json.dumps({
+                "ok": False,
+                "name": name,
+                "path": str(repo_path),
+                "error": (
+                    f"Reference '{change_ref}' is ambiguous: it matches more than one of the supported "
+                    "artifact kinds (change, spec, idea). Use a literal change name, spec path, or idea "
+                    "name instead."
+                ),
+            })
+        if idea_path is not None:
+            result["idea"] = {
+                "name": idea_path.stem,
+                "filename": idea_path.name,
+                "token": registry.change_token(idea_path.stem),
+                "content": _read_doc(idea_path),
+            }
+            return json.dumps(result)
         if change_dir is None:
-            spec_rel, spec_path = _resolve_spec(repo_path, registry, change_ref)
             if spec_rel and spec_path:
                 result["spec"] = {
                     "path": spec_rel,
@@ -280,7 +321,7 @@ def openspec_context(args: dict, **kwargs) -> str:
                 "ok": False,
                 "name": name,
                 "path": str(repo_path),
-                "error": f"No change or spec matching '{change_ref}' under openspec/.",
+                "error": f"No change, spec, or idea matching '{change_ref}' under openspec/.",
             })
         specs_root = change_dir / "specs"
         specs = []
@@ -316,11 +357,18 @@ def openspec_context(args: dict, **kwargs) -> str:
             {"path": rel, "token": registry.change_token(f"spec:{rel}")}
             for rel, _path in _iter_specs(repo_path)
         ]
+        ideas = [
+            {"name": idea.stem, "filename": idea.name, "token": registry.change_token(idea.stem)}
+            for idea in _iter_ideas(repo_path)
+        ]
         result["changes"] = changes
         result["specs"] = specs
+        result["ideas"] = ideas
         result["hint"] = (
-            "Active changes are listed in 'changes'; current specs are listed in 'specs'. Re-call with identifier "
-            f"'{name}/<token>' to load a specific change or spec, or use workdir with other openspec_* tools."
+            "Active changes are listed in 'changes'; current specs are listed in 'specs'; ideas are "
+            "listed in 'ideas'. Re-call with identifier "
+            f"'{name}/<token>' to load a specific change, spec, or idea, or use workdir with other "
+            "openspec_* tools."
         )
 
     return json.dumps(result)
